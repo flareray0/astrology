@@ -872,7 +872,6 @@ HOUSE_ARCHETYPE = {
 }
 
 PLANET_SIGN_MEANING = {
-    ("太陽", "蠍座"): "意志が深層心理・変容・真実追求へ向かい、極限状況ほど覚醒します",
     ("月", "獅子座"): "感情が誇りと創造欲を通じて発露し、承認される場で心が温まります",
     ("水星", "射手座"): "思考は大局観と思想性を重視し、意味を語る言葉に強みが出ます",
     ("金星", "山羊座"): "愛情は誠実さと責任を伴って表現され、長期的な信頼を重視します",
@@ -1460,7 +1459,7 @@ def _syn_house_overlay(chart1: list[dict], cusps1: list[float], chart2: list[dic
     for obj in chart2:
         if obj.get("planet") not in targets:
             continue
-        house = get_house(float(obj.get("lon", 0.0)), cusps1)
+        house = get_house(float(obj.get("longitude", 0.0)), cusps1)
         if house in {4, 7, 8, 10}:
             lines.append(f"- 相手の{obj.get('planet')}があなたの第{house}ハウスを刺激し、関係性の重要領域が活性化しやすいでしょう。")
     return lines[:4]
@@ -1585,6 +1584,118 @@ def generate_interpretation(
         )
     raise ValueError(f"未対応の chart_mode: {chart_mode}")
 
+
+
+
+def build_chart_from_input(
+    date_tuple: tuple[int, int, int],
+    time_str: str,
+    tz_offset: int | float,
+    lat: float,
+    lon: float,
+    *,
+    hsys: str = "P",
+    include_asteroids: bool = True,
+) -> dict:
+    """Notebook など外部UI向け: 入力値からチャートと付帯情報を構築して返す。"""
+    ut = convert_time_to_ut_decimal_hours(time_str, tz_offset)
+    julian_day = swe.julday(date_tuple[0], date_tuple[1], date_tuple[2], ut)
+    chart, cusps = calculate_astrology_data(
+        julian_day,
+        lat,
+        lon,
+        hsys=hsys,
+        include_asteroids=include_asteroids,
+    )
+    return {
+        "chart": chart,
+        "cusps": cusps,
+        "julian_day": julian_day,
+        "date": date_tuple,
+        "time": time_str,
+        "tz": tz_offset,
+        "lat": lat,
+        "lon": lon,
+    }
+
+
+def _save_report_files(result_text: str, interpretation_text: str) -> dict:
+    result_path = "astrology_result.txt"
+    interpretation_path = "astrology_interpretation.txt"
+    with open(result_path, "w", encoding="utf-8") as f:
+        f.write(result_text)
+    with open(interpretation_path, "w", encoding="utf-8") as f:
+        f.write(interpretation_text)
+    return {"result_path": result_path, "interpretation_path": interpretation_path}
+
+
+def _header_meta_for_target(mode: str, target: dict) -> dict:
+    return {
+        "target_datetime": f"{target['date'][0]:04d}-{target['date'][1]:02d}-{target['date'][2]:02d} {target['time']} (UTC{target['tz']:+g})",
+        "target_location": f"lat={target['lat']}, lon={target['lon']}",
+        "chart_mode": mode,
+    }
+
+
+def run_natal_report(target: dict, *, person_name: str = "あなた", include_minor_aspects: bool = True, include_composite_aspects: bool = True) -> dict:
+    chart = target["chart"]
+    aspects = calculate_aspects(chart, chart, include_minor_aspects=include_minor_aspects)
+    composites = calculate_composite_aspects(chart, COMPOSITE_ASPECTS) if include_composite_aspects else []
+    interp = generate_natal_interpretation(
+        chart,
+        [(aspects, "ネイタル")],
+        [(composites, "複合")],
+        person_name=person_name,
+    )
+    files = _save_report_files(interp, interp)
+    return {"chart": chart, "aspects": aspects, "composites": composites, "interpretation": interp, **files}
+
+
+def run_progressed_report(natal: dict, progressed: dict, *, person_name: str = "あなた", include_minor_aspects: bool = True) -> dict:
+    aspects = calculate_aspects(natal["chart"], progressed["chart"], include_minor_aspects=include_minor_aspects)
+    ctx = _header_meta_for_target("progressed", progressed)
+    interp = generate_progressed_interpretation(progressed["chart"], [(aspects, "ネイタル×プログレス")], [], person_name=person_name)
+    files = _save_report_files(str(aspects), interp)
+    return {"chart": progressed["chart"], "aspects": aspects, "composites": [], "interpretation": interp, "context": ctx, **files}
+
+
+def run_transit_report(natal: dict, transit: dict, *, person_name: str = "あなた", include_minor_aspects: bool = True) -> dict:
+    aspects = calculate_aspects(natal["chart"], transit["chart"], include_minor_aspects=include_minor_aspects)
+    ctx = _header_meta_for_target("transit", transit)
+    interp = generate_transit_interpretation(transit["chart"], [(aspects, "ネイタル×トランジット")], [], person_name=person_name)
+    files = _save_report_files(str(aspects), interp)
+    return {"chart": transit["chart"], "aspects": aspects, "composites": [], "interpretation": interp, "context": ctx, **files}
+
+
+def run_triple_report(natal: dict, progressed: dict, transit: dict, *, person_name: str = "あなた", include_minor_aspects: bool = True) -> dict:
+    aspects = [
+        (calculate_aspects(natal["chart"], natal["chart"], include_minor_aspects=include_minor_aspects), "ネイタル内"),
+        (calculate_aspects(natal["chart"], progressed["chart"], include_minor_aspects=include_minor_aspects), "ネイタル×プログレス"),
+        (calculate_aspects(natal["chart"], transit["chart"], include_minor_aspects=include_minor_aspects), "ネイタル×トランジット"),
+    ]
+    interp = generate_triple_interpretation(
+        natal_chart=natal["chart"],
+        progress_chart=progressed["chart"],
+        transit_chart=transit["chart"],
+        aspect_sets=aspects,
+        person_name=person_name,
+    )
+    files = _save_report_files(str(aspects), interp)
+    return {"chart": natal["chart"], "aspects": aspects, "composites": [], "interpretation": interp, **files}
+
+
+def run_synastry_report(person1: dict, person2: dict, *, person1_name: str = "あなた", person2_name: str = "相手", include_minor_aspects: bool = True) -> dict:
+    syn = calculate_aspects(person1["chart"], person2["chart"], include_minor_aspects=include_minor_aspects)
+    interp = generate_synastry_interpretation(
+        person1_chart=person1["chart"],
+        person2_chart=person2["chart"],
+        synastry_aspects=syn,
+        person1_name=person1_name,
+        person2_name=person2_name,
+        person1_cusps=person1.get("cusps"),
+    )
+    files = _save_report_files(str(syn), interp)
+    return {"chart": person1["chart"], "aspects": syn, "composites": [], "interpretation": interp, **files}
 
 def _build_chart_data_from_config(date_tuple, time_str, tz_offset, lat, lon):
     """

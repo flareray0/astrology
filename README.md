@@ -160,3 +160,17 @@ curl -sS -X POST http://127.0.0.1:8000/api/chart/natal \
 フォームでは `/form/natal` で `natal/progressed/transit/triple` を選択し、`/form/synastry` は2人入力専用です。
 
 `/api/report/render` には `chart_mode` を渡せます。
+
+
+## 10. Colab での使い方（Notebook は UI / `astrology.py` が正本）
+
+`astrology.ipynb` はロジックを持たず、GitHub の `astrology.py` を読み込んで実行する構成です。
+
+1. Colab で `astrology.ipynb` を開く
+2. Cell 1 で clone/pull + 依存導入
+3. Cell 2 で `importlib.reload(astrology)`
+4. Cell 3 で入力値（chart_mode, 日時, 座標）を編集
+5. Cell 4 実行でレポート生成（`natal/progressed/transit/triple/synastry` 全対応）
+6. Cell 5 で `astrology_result.txt` / `astrology_interpretation.txt` をダウンロード
+
+この構成により、ロジック改修は `astrology.py` のみ更新すれば反映できます。
