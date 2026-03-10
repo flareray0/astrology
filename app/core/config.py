@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -19,4 +20,8 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+if os.getenv("RESULT_OUTPUT_DIR"):
+    settings.results_dir = Path(os.getenv("RESULT_OUTPUT_DIR", "data/results"))
+
 settings.results_dir.mkdir(parents=True, exist_ok=True)
