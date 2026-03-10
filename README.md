@@ -1,176 +1,224 @@
-# astrology MVP (FastAPI)
+# astrology
 
-この README は **「まずローカルで FastAPI MVP が起動し、主要エンドポイントが疎通するか」** を最優先にした最小手順です。
+`astrology.py` を正本ロジックとして、Colab / Windows / Linux で同じ導線で検証・実行できるように整備したリポジトリです。
 
-## 0. 前提
-- Python 3.11+
-- `pip` が利用可能
-- このリポジトリ直下で作業
+## 1. 現状の環境依存問題（整理）
+
+- ephemeris 参照先が固定パスだと clone 先の違いで壊れる
+- Notebook と `.py` で実行導線が分かれると検証の再現性が落ちる
+- カレントディレクトリ依存の出力は環境差で行方不明になりやすい
+- clone 後の最短動作確認コマンドが不明瞭だと初期離脱が増える
+
+## 2. 改修方針
+
+- **DiffOnly原則**: 占星術ロジックは維持し、環境吸収レイヤーを追加
+- ephemeris は `ASTROLOGY_EPHE_PATH` 優先、未指定時は repo 相対候補を探索
+- レポート出力先は `RESULT_OUTPUT_DIR` で環境差を吸収
+- Notebook は `astrology.py` を import して実行（UI/補助用途へ寄せる）
+- clone 直後に使える `scripts/` のサンプル実行導線を追加
 
 ---
 
-## 1. 依存関係の確認
+## 3. セットアップ（共通）
 
 ```bash
-python --version
+git clone <your-fork-or-origin-url>
+cd astrology
+cp .env.example .env
+```
+
+> ephemeris ファイルを `data/ephe` に配置するか、`ASTROLOGY_EPHE_PATH` で既存配置先を指定してください。
+
+---
+
+
+## 3.1 ephemeris ディレクトリ構成（se1配置）
+
+se1 ファイルをアップロード済みの場合は、まず以下に集約してください。
+
+```bash
+python scripts/organize_ephe.py
+# 既存ファイルを残したい場合
+python scripts/organize_ephe.py --copy
+```
+
+推奨構成:
+
+```text
+astrology/
+  data/
+    ephe/      # .se1/.se2/.sef
+    results/   # 実行結果
+```
+
+`data/ephe` が `ASTROLOGY_EPHE_PATH` のデフォルト探索先です。
+
+---
+
+## 4. Colab での使い方
+
+`astrology.ipynb` は以下の5ステップ構成です。
+
+1. clone / pull + `pip install -r requirements.txt`
+2. `import astrology` + `reload`
+3. 入力設定（chart_mode, 日時, 緯度経度）
+4. `run_report_by_mode(...)` 実行
+5. 生成ファイルをダウンロード
+
+Notebook 内で環境変数を自動設定します。
+
+- `ASTROLOGY_EPHE_PATH=/content/astrology/data/ephe`
+- `RESULT_OUTPUT_DIR=/content/astrology/data/results`
+
+---
+
+## 5. Windows での使い方
+
+```powershell
+git clone <your-fork-or-origin-url>
+cd astrology
 python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+copy .env.example .env
+```
+
+動作確認（まずこれ）:
+
+```powershell
+python scripts/run_natal_example.py
+python scripts/run_synastry_example.py
+```
+
+FastAPI 起動:
+
+```powershell
+python scripts/run_fastapi_dev.py
+```
+
+Notebook 起動:
+
+```powershell
+jupyter lab
+```
+
+---
+
+## 6. Linux での使い方
+
+```bash
+git clone <your-fork-or-origin-url>
+cd astrology
+python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-```
-
-`requirements.txt` は以下を前提としています（FastAPI/uvicorn/Jinja2/Pydantic/Swiss Ephemeris）。
-
----
-
-## 2. ephemeris 配置前提の確認
-
-本アプリは `ASTROLOGY_EPHE_PATH`（既定値: `./data/ephe`）を Swiss Ephemeris の参照先に使います。
-
-```bash
 cp .env.example .env
-mkdir -p data/ephe data/results
 ```
 
-- 既定値のまま使う場合は `data/ephe` に ephemeris ファイルを配置
-- 変更する場合は `.env` の `ASTROLOGY_EPHE_PATH` を実パスへ更新
-- 小惑星（Eros/Persephone）計算に必要なデータが不足している場合、該当天体はスキップされる可能性があります
-
----
-
-## 3. ローカル起動手順（最小）
-
-初回 clone 直後にまとめて準備する場合（推奨）:
+動作確認（まずこれ）:
 
 ```bash
-bash scripts/setup_vps.sh
+python scripts/run_natal_example.py
+python scripts/run_synastry_example.py
 ```
 
-手動で行う場合:
+FastAPI 起動:
 
 ```bash
-source .venv/bin/activate
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+python scripts/run_fastapi_dev.py
+# or
+uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-または:
+Notebook 起動:
 
 ```bash
-source .venv/bin/activate
-bash scripts/run_local.sh
+jupyter lab
 ```
 
 ---
 
-## 4. `/health` の疎通確認
+## 7. FastAPI 起動とAPI確認
 
-別ターミナルで:
+起動後:
+
+- Health: `GET http://127.0.0.1:8000/health`
+- 入力フォーム: `GET /form/natal`, `GET /form/synastry`
+- API: `POST /api/chart/natal|progressed|transit|triple|synastry`
+
+最小確認例:
 
 ```bash
 curl -sS http://127.0.0.1:8000/health
 ```
 
-期待値:
+---
 
-```json
-{"status":"ok"}
-```
+## 8. chart_mode の違い
+
+- `natal`: 出生図
+- `progressed`: 二次進行（出生 + 基準時）
+- `transit`: トランジット（出生 + 現在時）
+- `triple`: natal + progressed + transit 統合
+- `synastry`: 2人相性
+
+共通導線として `astrology.run_report_by_mode(...)` を使えます。
 
 ---
 
-## 5. `/form/natal` の画面確認
+## 9. ephemeris path の設定方法
 
-ブラウザで以下を開く:
+優先順位:
 
-- `http://127.0.0.1:8000/form/natal`
+1. `ASTROLOGY_EPHE_PATH`（環境変数）
+2. repo 相対候補（`data/ephe`, `ephe` など）
 
-CLI で最低限確認する場合:
+例（Linux/macOS）:
 
 ```bash
-curl -I http://127.0.0.1:8000/form/natal
+export ASTROLOGY_EPHE_PATH="$(pwd)/data/ephe"
 ```
 
-`HTTP/1.1 200 OK` なら到達できています。
+例（Windows PowerShell）:
 
----
-
-## 6. `/api/chart/natal` のサンプルリクエスト確認
-
-```bash
-curl -sS -X POST http://127.0.0.1:8000/api/chart/natal \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "person_name": "あなた",
-    "birth": {
-      "date": "1984-11-15",
-      "time": "11:27",
-      "timezone": 9,
-      "lat": 37.38,
-      "lon": 140.18
-    }
-  }'
+```powershell
+$env:ASTROLOGY_EPHE_PATH = "$(Get-Location)\data\ephe"
 ```
 
-期待値:
-- HTTP 200
-- `result_id`, `chart`, `aspects`, `composite_aspects` を含む JSON
+---
+
+## 10. .env / 環境変数
+
+`.env.example` の主要項目:
+
+- `ASTROLOGY_EPHE_PATH`: ephemeris データ参照先
+- `RESULT_OUTPUT_DIR`: 生成レポート出力先
+- `APP_ENV`: 実行環境ラベル
+- `CHART_MODE_DEFAULT`: デフォルトチャートモード
+- `ASTROLOGY_HOUSE_SYSTEM`, `ASTROLOGY_INCLUDE_ASTEROIDS`, `ASTROLOGY_INCLUDE_MINOR_ASPECTS`
 
 ---
 
-## 7. 起動時に詰まりやすい箇所（先回りチェック）
+## 11. clone 後の最小確認手順（チェックリスト）
 
-1. **依存パッケージ未導入**
-   - 症状: `ModuleNotFoundError: fastapi` など
-   - 対応: 仮想環境を有効化して `pip install -r requirements.txt` を再実行
-
-2. **ephemeris パス不整合**
-   - 症状: 計算結果が不完全、または天体計算エラー
-   - 対応: `.env` の `ASTROLOGY_EPHE_PATH` と実ファイル配置先を一致させる
-
-3. **ポート競合（8000）**
-   - 症状: `Address already in use`
-   - 対応: 別ポート起動（例: `--port 8001`）
-
-4. **入力フォーマット不正（特に `time`）**
-   - 症状: 422 Unprocessable Entity
-   - 対応: `time` は必ず `HH:MM`（24時間表記）
-
-5. **`data/results` 未作成時の書き込み失敗**
-   - 対応: `mkdir -p data/results`（通常は起動時に自動生成されますが、先に作成しておくと安全）
+- [ ] `python -c "import astrology; print(astrology.EPHEMERIS_PATH)"` が通る
+- [ ] `python scripts/run_natal_example.py` で natal レポート出力
+- [ ] `python scripts/run_synastry_example.py` で synastry レポート出力
+- [ ] `python scripts/run_fastapi_dev.py` で API 起動
+- [ ] `curl http://127.0.0.1:8000/health` が `{"status":"ok"}` を返す
+- [ ] Notebook から `run_report_by_mode(...)` 実行できる
 
 ---
 
-## 8. 補足（MVP の確認対象）
+## 12. 公開関数（Notebook/スクリプト向け）
 
-- ヘルスチェック: `GET /health`
-- 入力画面: `GET /form/natal`, `GET /form/synastry`
-- API: `POST /api/chart/natal`, `POST /api/chart/progressed`, `POST /api/chart/transit`, `POST /api/chart/triple`, `POST /api/chart/synastry`
-- 結果参照: `GET /result/{result_id}`, `GET /result/{result_id}/view`
+- `build_chart_from_input(...)`
+- `run_natal_report(...)`
+- `run_progressed_report(...)`
+- `run_transit_report(...)`
+- `run_triple_report(...)`
+- `run_synastry_report(...)`
+- `run_report_by_mode(...)` ← モード分岐を統一
+- `configure_ephemeris_path(...)`
 
-「まず動くか確認する」目的では、**`/health` → `/form/natal` → `/api/chart/natal`** の順で確認するのが最短です。
-
-
-## 9. チャート種別（chart mode）
-
-- `natal`: 出生図（1人分）
-- `progressed`: 二次進行（出生 + 基準日時）
-- `transit`: トランジット（出生 + 現在日時）
-- `triple`: ネイタル + プログレス + トランジット統合
-- `synastry`: 相性（2人分）
-
-フォームでは `/form/natal` で `natal/progressed/transit/triple` を選択し、`/form/synastry` は2人入力専用です。
-
-`/api/report/render` には `chart_mode` を渡せます。
-
-
-## 10. Colab での使い方（Notebook は UI / `astrology.py` が正本）
-
-`astrology.ipynb` はロジックを持たず、GitHub の `astrology.py` を読み込んで実行する構成です。
-
-1. Colab で `astrology.ipynb` を開く
-2. Cell 1 で clone/pull + 依存導入
-3. Cell 2 で `importlib.reload(astrology)`
-4. Cell 3 で入力値（chart_mode, 日時, 座標）を編集
-5. Cell 4 実行でレポート生成（`natal/progressed/transit/triple/synastry` 全対応）
-6. Cell 5 で `astrology_result.txt` / `astrology_interpretation.txt` をダウンロード
-
-この構成により、ロジック改修は `astrology.py` のみ更新すれば反映できます。
+返り値には `chart`, `aspects`, `composites`, `interpretation`, `result_path`, `interpretation_path` が含まれます。

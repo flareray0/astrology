@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+.pytest_cache/
+
+# Notebook
+.ipynb_checkpoints/
+
+# Local env
+.env
+
+# Runtime outputs
+data/results/*.json
+data/results/*.txt
+astrology_result.txt
+astrology_interpretation.txt
+
+# Swiss Ephemeris binary data (local only)
+data/ephe/*.se1
+data/ephe/*.se2
+data/ephe/*.sef
+data/ephe/*.txt
