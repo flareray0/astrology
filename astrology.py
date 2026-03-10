@@ -94,6 +94,20 @@ mode = 'triple_chart'
 # エフェメリスのパスを設定
 swe.set_ephe_path(r'/content/drive/MyDrive/ephe')
 
+# 複合アスペクト検出から除外する天体・感受点（標準的占星術慣習に基づく）
+# ASC/DSC/MC/IC は出生時刻誤差の影響が大きいため除外
+# テール類はヘッドと180°固定のため重複検出を防ぐために除外
+COMPOSITE_SKIP = {
+    'アセンダント',
+    'ディセンダント',
+    'MC（ミッドヘヴン）',
+    'IC（天底）',
+    'バーテクス',
+    'パート・オブ・フォーチュン',
+    'ドラゴンテール',
+    'トゥルーテール',
+}
+
 # =======================
 # 2. 関数定義セクション
 # =======================
@@ -358,12 +372,151 @@ def calculate_aspects(
 
 def calculate_composite_aspects(astro_data, composite_aspects_def):
     """
-    複合アスペクト（ヨッド、グランドクロス等）は現在未実装。
-    将来的に実装するまで、常に空リストを返します。
+    複合アスペクト（ヨッド、グランドクロス、Tスクエア、グランドトライン、
+    キート、ミスティックレクタングル、レクタングル、スター、ヴェース）を検出します。
+    COMPOSITE_SKIP に含まれる感受点は除外します。
     """
     composite_found = []
-    return composite_found
+    # 標準的占星術慣習に基づくフィルタリング
+    filtered = [p for p in astro_data if p['planet'] not in COMPOSITE_SKIP]
 
+    def angular_diff(p1, p2):
+        diff = abs(p1['longitude'] - p2['longitude'])
+        return min(diff, 360 - diff)
+
+    def is_aspect(p1, p2, degree, orb):
+        return abs(angular_diff(p1, p2) - degree) <= orb
+
+    def unique_planets(planets):
+        return len({p['planet'] for p in planets}) == len(planets)
+
+    def as_name_list(planets):
+        return [p['planet'] for p in planets]
+
+    def add_pattern(type_name, planets, details):
+        if not unique_planets(planets):
+            return
+        sorted_names = tuple(sorted(as_name_list(planets)))
+        signature = (type_name, sorted_names)
+        if signature in seen:
+            return
+        seen.add(signature)
+        composite_found.append({
+            'type': type_name,
+            'planets': as_name_list(planets),
+            'details': details,
+        })
+
+    seen = set()
+
+    for jp_name, comp in composite_aspects_def.items():
+        type_name = comp.get('type')
+        orb = comp.get('orbs', 5)
+
+        # ヨッド: 頂点1 → 2底辺がセクスタイル、頂点が両底辺とクインカンクス
+        if type_name == 'yod':
+            for p1, p2, apex in combinations(filtered, 3):
+                if is_aspect(p1, p2, 60, orb) and is_aspect(apex, p1, 150, orb) and is_aspect(apex, p2, 150, orb):
+                    add_pattern(jp_name, [apex, p1, p2], {'構成': '頂点1 + セクスタイル2'})
+                if is_aspect(p1, apex, 60, orb) and is_aspect(p2, p1, 150, orb) and is_aspect(p2, apex, 150, orb):
+                    add_pattern(jp_name, [p2, p1, apex], {'構成': '頂点1 + セクスタイル2'})
+                if is_aspect(p2, apex, 60, orb) and is_aspect(p1, p2, 150, orb) and is_aspect(p1, apex, 150, orb):
+                    add_pattern(jp_name, [p1, p2, apex], {'構成': '頂点1 + セクスタイル2'})
+
+        # Tスクエア: オポジション + 両端にスクエアの頂点
+        elif type_name == 't_square':
+            for apex, p1, p2 in combinations(filtered, 3):
+                if is_aspect(p1, p2, 180, orb) and is_aspect(apex, p1, 90, orb) and is_aspect(apex, p2, 90, orb):
+                    add_pattern(jp_name, [apex, p1, p2], {'構成': '頂点1 + オポジション2'})
+                if is_aspect(apex, p2, 180, orb) and is_aspect(p1, apex, 90, orb) and is_aspect(p1, p2, 90, orb):
+                    add_pattern(jp_name, [p1, apex, p2], {'構成': '頂点1 + オポジション2'})
+                if is_aspect(apex, p1, 180, orb) and is_aspect(p2, apex, 90, orb) and is_aspect(p2, p1, 90, orb):
+                    add_pattern(jp_name, [p2, apex, p1], {'構成': '頂点1 + オポジション2'})
+
+        # グランドトライン: 3天体がトライン
+        elif type_name == 'grand_trine':
+            for p1, p2, p3 in combinations(filtered, 3):
+                if is_aspect(p1, p2, 120, orb) and is_aspect(p2, p3, 120, orb) and is_aspect(p1, p3, 120, orb):
+                    add_pattern(jp_name, [p1, p2, p3], {'構成': 'トライン3本'})
+
+        # グランドクロス: オポジション2本 + スクエア4本
+        elif type_name == 'grand_cross':
+            for p1, p2, p3, p4 in combinations(filtered, 4):
+                planets = [p1, p2, p3, p4]
+                pairs = [(i, j) for i in range(4) for j in range(i + 1, 4)]
+                opposition_pairs = [
+                    (i, j) for (i, j) in pairs if is_aspect(planets[i], planets[j], 180, orb)
+                ]
+                if len(opposition_pairs) != 2:
+                    continue
+                used_indices = {idx for pair in opposition_pairs for idx in pair}
+                if len(used_indices) != 4:
+                    continue
+                square_count = sum(1 for (i, j) in pairs if is_aspect(planets[i], planets[j], 90, orb))
+                if square_count >= 4:
+                    add_pattern(jp_name, planets, {'構成': 'オポジション2本 + スクエア4本'})
+
+        # キート: グランドトライン + テールがオポジション + セクスタイル2本
+        elif type_name == 'kite':
+            for p1, p2, p3 in combinations(filtered, 3):
+                if not (is_aspect(p1, p2, 120, orb) and is_aspect(p2, p3, 120, orb) and is_aspect(p1, p3, 120, orb)):
+                    continue
+                trine = [p1, p2, p3]
+                for tail in filtered:
+                    if tail in trine:
+                        continue
+                    for apex in trine:
+                        if is_aspect(tail, apex, 180, orb):
+                            remain = [t for t in trine if t is not apex]
+                            if len(remain) == 2 and is_aspect(tail, remain[0], 60, orb) and is_aspect(tail, remain[1], 60, orb):
+                                add_pattern(jp_name, trine + [tail], {'構成': 'グランドトライン + オポジション1本 + セクスタイル2本'})
+
+        # ミスティックレクタングル: オポジション2本 + セクスタイル2本 + トライン2本
+        elif type_name == 'mystic_rectangle':
+            for p1, p2, p3, p4 in combinations(filtered, 4):
+                planets = [p1, p2, p3, p4]
+                pairs = [(i, j) for i in range(4) for j in range(i + 1, 4)]
+                opp = [(i, j) for (i, j) in pairs if is_aspect(planets[i], planets[j], 180, orb)]
+                tri = [(i, j) for (i, j) in pairs if is_aspect(planets[i], planets[j], 120, orb)]
+                sxt = [(i, j) for (i, j) in pairs if is_aspect(planets[i], planets[j], 60, orb)]
+                if len(opp) == 2 and len(tri) == 2 and len(sxt) == 2:
+                    add_pattern(jp_name, planets, {'構成': 'オポジション2本 + トライン2本 + セクスタイル2本'})
+
+        # レクタングル（長方形）: オポジション2本 + スクエア2本 + セクスタイル2本
+        elif type_name == 'rectangle':
+            for p1, p2, p3, p4 in combinations(filtered, 4):
+                planets = [p1, p2, p3, p4]
+                pairs = [(i, j) for i in range(4) for j in range(i + 1, 4)]
+                opp = [(i, j) for (i, j) in pairs if is_aspect(planets[i], planets[j], 180, orb)]
+                sqr = [(i, j) for (i, j) in pairs if is_aspect(planets[i], planets[j], 90, orb)]
+                sxt = [(i, j) for (i, j) in pairs if is_aspect(planets[i], planets[j], 60, orb)]
+                if len(opp) == 2 and len(sqr) == 2 and len(sxt) == 2:
+                    add_pattern(jp_name, planets, {'構成': 'オポジション2本 + スクエア2本 + セクスタイル2本'})
+
+        # スター（ダビデの星）: グランドトライン2つが重なる6天体
+        elif type_name == 'star':
+            for combo in combinations(filtered, 6):
+                planets = list(combo)
+                pairs = [(i, j) for i in range(6) for j in range(i + 1, 6)]
+                opp_count = sum(1 for (i, j) in pairs if is_aspect(planets[i], planets[j], 180, orb))
+                tri_count = sum(1 for (i, j) in pairs if is_aspect(planets[i], planets[j], 120, orb))
+                sxt_count = sum(1 for (i, j) in pairs if is_aspect(planets[i], planets[j], 60, orb))
+                # 6本のトライン + 6本のセクスタイル + 3本のオポジション（理想形）
+                if tri_count >= 6 and sxt_count >= 6 and opp_count >= 3:
+                    add_pattern(jp_name, planets, {'構成': 'ダビデの星（グランドトライン2重）'})
+
+        # ヴェース（花瓶）: Tスクエア + セクスタイル2本（ソフトな出口）
+        elif type_name == 'vase':
+            for apex, p1, p2 in combinations(filtered, 3):
+                if not (is_aspect(p1, p2, 180, orb) and is_aspect(apex, p1, 90, orb) and is_aspect(apex, p2, 90, orb)):
+                    continue
+                for outlet in filtered:
+                    if outlet in [apex, p1, p2]:
+                        continue
+                    if is_aspect(outlet, p1, 60, orb) and is_aspect(outlet, p2, 60, orb):
+                        add_pattern(jp_name, [apex, p1, p2, outlet], {'構成': 'Tスクエア + セクスタイル出口1'})
+
+    return composite_found
 def get_aspect_between(p1, p2, orb):
     """
     二つの惑星データからアスペクトを判定（使いたい場合に実装）。
@@ -451,6 +604,158 @@ def print_sun_position(chart, chart_name):
             print(f"逆行フラグ: {retro_text if retro_text else 'なし'}")
 
 
+def save_results_to_text(
+    charts: dict,
+    aspects_sets: list,
+    composite_sets: list,
+    filepath: str,
+) -> None:
+    """
+    チャート・アスペクト・複合アスペクトの結果をテキストファイルに保存します。
+
+    Args:
+        charts: {'チャート名': chart_data} の辞書
+        aspects_sets: [(aspects_list, '見出し文字列'), ...] のリスト
+        composite_sets: [(composite_list, '見出し文字列'), ...] のリスト
+        filepath: 保存先ファイルパス
+    """
+    lines = []
+    lines.append(f"占星術チャート結果レポート")
+    lines.append(f"生成日時: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    lines.append("=" * 60)
+
+    for chart_name, chart in charts.items():
+        lines.append(f"\n--- {chart_name} ---")
+        for planet in chart:
+            retro_text = "（逆行）" if planet.get('retrograde', False) else ""
+            lines.append(
+                f"  {planet['planet']}{retro_text}: {planet['sign']} "
+                f"{planet['longitude']:.2f}°  H{planet['house']}"
+            )
+
+    for aspects, title in aspects_sets:
+        lines.append(f"\n--- {title} ---")
+        if not aspects:
+            lines.append("  アスペクトは検出されませんでした。")
+        else:
+            for asp in aspects:
+                r1 = "（逆行）" if asp.get('planet1_retrograde') else ""
+                r2 = "（逆行）" if asp.get('planet2_retrograde') else ""
+                lines.append(
+                    f"  {asp['planet1']}{r1}({asp['planet1_sign']}・H{asp['planet1_house']}) "
+                    f"× {asp['planet2']}{r2}({asp['planet2_sign']}・H{asp['planet2_house']}): "
+                    f"{asp['aspect']}  オーブ{asp['orb']:.2f}°"
+                )
+
+    for composites, title in composite_sets:
+        lines.append(f"\n--- {title} ---")
+        if not composites:
+            lines.append("  複合アスペクトは検出されませんでした。")
+        else:
+            for comp in composites:
+                planets_str = "、".join(comp['planets'])
+                lines.append(f"  {comp['type']}: {planets_str}")
+
+    with open(filepath, 'w', encoding='utf-8') as f:
+        f.write("\n".join(lines))
+    print(f"[SAVE] 結果を保存しました: {filepath}")
+
+# 占い師文体テンプレート（差分追加）
+_ASPECT_INTERP = {
+    'コンジャンクション': "{p1}と{p2}が重なり合い、その力は一つに融合しています。強烈な集中とエネルギーの統合をもたらします。",
+    'オポジション':       "{p1}と{p2}は対極に位置し、緊張と引力が共存します。他者との関係や内なる葛藤を通じて成長が促されます。",
+    'トライン':           "{p1}と{p2}は調和し、才能と恵みが自然に流れ込みます。創造性や幸運を引き寄せる力があります。",
+    'スクエア':           "{p1}と{p2}の間には摩擦があります。困難を乗り越える意志と行動力を試される局面があるでしょう。",
+    'セクスタイル':       "{p1}と{p2}は穏やかに協調し、機会と可能性の扉を開きます。",
+    'クインカンクス（150°）': "{p1}と{p2}は不思議な緊張感を持ちます。調整と適応を重ねることで新たな統合が生まれます。",
+}
+
+_COMPOSITE_INTERP = {
+    'ヨッド':             "「神の指」とも呼ばれるヨッドが形成されています（{planets}）。特別な使命や運命的な課題を示し、頂点の天体が示す領域で深い変容が求められます。",
+    'グランドトライン':   "3つの天体（{planets}）が大きな三角形を描くグランドトラインが見られます。豊かな才能と恵みの流れがありますが、その安定ゆえに成長への動機が失われやすい面もあります。",
+    'Tスクエア':          "Tスクエア（{planets}）が示す強い緊張があります。頂点の天体が示す課題に全力で取り組むことで、大きな力が解放されます。",
+    'グランドクロス':     "4つの天体（{planets}）が十字を描くグランドクロスが形成されています。強大な緊張とプレッシャーを抱えますが、それを統合できたとき圧倒的な力となります。",
+    'キート':             "凧の形を描くキート（{planets}）があります。グランドトラインの恵みに方向性と推進力が加わり、才能が現実世界へ発揮されやすくなります。",
+    'ミスティックレクタングル': "神秘的な長方形（{planets}）が形成されています。調和と緊張が絶妙なバランスを保ちながら、霊的・創造的な統合を促します。",
+    'レクタングル':       "レクタングル（{planets}）が見られます。実践的な緊張と協調が組み合わさり、粘り強く取り組む力をもたらします。",
+    'スター':             "ダビデの星とも呼ばれる6天体のスター（{planets}）が形成されています。多面的な才能と強い霊的・社会的な影響力を示します。",
+    'ヴェース':           "ヴェース（{planets}）が示すパターンがあります。Tスクエアの緊張に出口が与えられ、問題解決への道筋が自然に開きます。",
+}
+
+def generate_interpretation(
+    natal_chart: list,
+    aspects_sets: list,
+    composite_sets: list,
+    person_name: str = "あなた",
+) -> str:
+    """
+    チャート・アスペクト・複合アスペクトから占い師文体の解釈テキストを自動生成します。
+
+    Args:
+        natal_chart: ネイタルチャートデータ
+        aspects_sets: [(aspects_list, '見出し'), ...] のリスト
+        composite_sets: [(composite_list, '見出し'), ...] のリスト
+        person_name: 対象者の名前（デフォルト「あなた」）
+
+    Returns:
+        str: 解釈テキスト
+    """
+    lines = []
+    lines.append(f"＊ {person_name}の星読みレポート ＊")
+    lines.append(f"生成日時: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    lines.append("=" * 60)
+
+    # 太陽・月・ASC の基本情報
+    sun = next((p for p in natal_chart if p['planet'] == '太陽'), None)
+    moon = next((p for p in natal_chart if p['planet'] == '月'), None)
+    asc = next((p for p in natal_chart if p['planet'] == 'アセンダント'), None)
+
+    lines.append("\n【基本的な性質】")
+    if sun:
+        lines.append(f"太陽は{sun['sign']}に位置しています。{sun['sign']}の本質的なエネルギーが、{person_name}の核となる自己表現を彩ります。")
+    if moon:
+        lines.append(f"月は{moon['sign']}に宿り、感情の深いところで{moon['sign']}の感受性が息づいています。")
+    if asc:
+        lines.append(f"アセンダントは{asc['sign']}。世界との接点において、{asc['sign']}の気質が自然と滲み出るでしょう。")
+
+    # アスペクト解釈（メジャーのみ・最大10件）
+    lines.append("\n【惑星同士の対話】")
+    major_aspect_names = set(_ASPECT_INTERP.keys())
+    interpreted = 0
+    for aspects, title in aspects_sets:
+        for asp in aspects:
+            if asp['aspect'] not in major_aspect_names:
+                continue
+            tmpl = _ASPECT_INTERP.get(asp['aspect'])
+            if tmpl:
+                lines.append(tmpl.format(p1=asp['planet1'], p2=asp['planet2']))
+                interpreted += 1
+            if interpreted >= 10:
+                break
+        if interpreted >= 10:
+            break
+    if interpreted == 0:
+        lines.append("主要なアスペクトは検出されませんでした。")
+
+    # 複合アスペクト解釈
+    lines.append("\n【特別な天体配置】")
+    any_composite = False
+    for composites, title in composite_sets:
+        for comp in composites:
+            tmpl = _COMPOSITE_INTERP.get(comp['type'])
+            if tmpl:
+                planets_str = "・".join(comp['planets'])
+                lines.append(tmpl.format(planets=planets_str))
+                any_composite = True
+    if not any_composite:
+        lines.append("今回は特別な複合パターンは検出されませんでした。")
+
+    lines.append("\n" + "=" * 60)
+    lines.append("※このレポートは天体配置に基づく自動生成テキストです。")
+
+    return "\n".join(lines)
+
+
 # =======================
 # 3. 使用例セクション
 # =======================
@@ -533,6 +838,42 @@ if __name__ == "__main__":
         for aspects, aspect_title in aspect_sets:
             print_aspects(aspects, aspect_title)
 
+        # --- 結果テキスト保存（差分追加） ---
+        save_results_to_text(
+            charts={
+                'ネイタルチャート': natal_chart,
+                'プログレスチャート': progress_chart,
+                'トランジットチャート': transit_chart,
+            },
+            aspects_sets=[
+                (natal_natal_aspects,    'ネイタルチャート内のアスペクト'),
+                (natal_progress_aspects, 'ネイタルとプログレスのアスペクト'),
+                (natal_transit_aspects,  'ネイタルとトランジットのアスペクト'),
+                (progress_transit_aspects, 'プログレスとトランジットのアスペクト'),
+            ],
+            composite_sets=[
+                (calculate_composite_aspects(natal_chart, COMPOSITE_ASPECTS), 'ネイタル複合アスペクト'),
+            ],
+            filepath='astrology_result.txt',
+        )
+
+        # --- 占い師文体レポート生成（差分追加） ---
+        interp_text = generate_interpretation(
+            natal_chart=natal_chart,
+            aspects_sets=[
+                (natal_natal_aspects,    'ネイタルチャート内のアスペクト'),
+                (natal_transit_aspects,  'ネイタルとトランジットのアスペクト'),
+            ],
+            composite_sets=[
+                (calculate_composite_aspects(natal_chart, COMPOSITE_ASPECTS), 'ネイタル複合アスペクト'),
+            ],
+            person_name='あなた',
+        )
+        print(interp_text)
+        with open('astrology_interpretation.txt', 'w', encoding='utf-8') as f:
+            f.write(interp_text)
+        print("[SAVE] 解釈レポートを保存しました: astrology_interpretation.txt")
+
     elif mode == 'synastry':
         print("=== シナストリーの計算と表示 ===")
 
@@ -587,6 +928,37 @@ if __name__ == "__main__":
 
         if include_composite_aspects:
             print_composite_aspects(composite_patterns_synastry, "シナストリー")
+
+        # --- 結果テキスト保存（差分追加） ---
+        save_results_to_text(
+            charts={
+                '俺のネイタルチャート': person1_chart,
+                '相手のネイタルチャート': person2_chart,
+            },
+            aspects_sets=[
+                (synastry_aspects, 'シナストリーアスペクト'),
+            ],
+            composite_sets=[
+                (composite_patterns_synastry, 'シナストリー複合アスペクト'),
+            ],
+            filepath='astrology_result.txt',
+        )
+
+        # --- 占い師文体レポート生成（差分追加） ---
+        interp_text = generate_interpretation(
+            natal_chart=person1_chart,
+            aspects_sets=[
+                (synastry_aspects, 'シナストリーアスペクト'),
+            ],
+            composite_sets=[
+                (composite_patterns_synastry, 'シナストリー複合アスペクト'),
+            ],
+            person_name='二人の関係',
+        )
+        print(interp_text)
+        with open('astrology_interpretation.txt', 'w', encoding='utf-8') as f:
+            f.write(interp_text)
+        print("[SAVE] 解釈レポートを保存しました: astrology_interpretation.txt")
 
     else:
         print("無効なモードが指定されています。'triple_chart' か 'synastry' を指定してください。")
