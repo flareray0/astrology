@@ -3,6 +3,45 @@ from datetime import datetime
 from itertools import combinations
 
 # =======================
+# 0. 入力設定ブロック（差分追加）
+# USE_CONFIG_BLOCK = True  → ここで日時・座標を一括設定
+# USE_CONFIG_BLOCK = False → 3.使用例セクション内で個別設定（従来動作）
+# =======================
+
+USE_CONFIG_BLOCK = True
+
+# --- ネイタル ---
+NATAL_DATE  = (1984, 11, 15)   # (年, 月, 日)
+NATAL_TIME  = "11:27"          # ローカル時刻 HH:MM
+NATAL_TZ    = 9                # UTC+? (日本なら9)
+NATAL_LAT   = 37.38
+NATAL_LON   = 140.18
+
+# --- プログレス ---
+PROGRESS_DATE = (1984, 12, 26)
+PROGRESS_TIME = "00:00"
+PROGRESS_TZ   = 9
+PROGRESS_LAT  = 37.38
+PROGRESS_LON  = 140.18
+
+# --- トランジット ---
+TRANSIT_DATE = (2026, 2, 12)
+TRANSIT_TIME = "00:00"
+TRANSIT_TZ   = 9
+TRANSIT_LAT  = 37.38
+TRANSIT_LON  = 140.18
+
+# --- シナストリー相手（synastryモード時のみ使用） ---
+PERSON2_DATE = (1967, 5, 13)
+PERSON2_TIME = "00:00"
+PERSON2_TZ   = 9
+PERSON2_LAT  = 35.68
+PERSON2_LON  = 139.65
+
+# --- レポート対象者名 ---
+PERSON_NAME = "あなた"
+
+# =======================
 # 1. 設定セクション
 # =======================
 
@@ -661,15 +700,103 @@ def save_results_to_text(
     print(f"[SAVE] 結果を保存しました: {filepath}")
 
 # 占い師文体テンプレート（差分追加）
-_ASPECT_INTERP = {
-    'コンジャンクション': "{p1}と{p2}が重なり合い、その力は一つに融合しています。強烈な集中とエネルギーの統合をもたらします。",
-    'オポジション':       "{p1}と{p2}は対極に位置し、緊張と引力が共存します。他者との関係や内なる葛藤を通じて成長が促されます。",
-    'トライン':           "{p1}と{p2}は調和し、才能と恵みが自然に流れ込みます。創造性や幸運を引き寄せる力があります。",
-    'スクエア':           "{p1}と{p2}の間には摩擦があります。困難を乗り越える意志と行動力を試される局面があるでしょう。",
-    'セクスタイル':       "{p1}と{p2}は穏やかに協調し、機会と可能性の扉を開きます。",
-    'クインカンクス（150°）': "{p1}と{p2}は不思議な緊張感を持ちます。調整と適応を重ねることで新たな統合が生まれます。",
+def _orb_label(orb: float) -> str:
+    """オーブの密度をラベルで返す（差分追加）。"""
+    if orb <= 1.0:
+        return "ほぼ正確な（非常にタイトな）"
+    elif orb <= 3.0:
+        return "タイトな"
+    elif orb <= 5.0:
+        return "中程度の"
+    else:
+        return "緩やかな"
+
+_HOUSE_THEME = {
+    1:  "自己・外見・第一印象",
+    2:  "価値観・お金・所有",
+    3:  "コミュニケーション・兄弟・短距離移動",
+    4:  "家庭・ルーツ・内面の基盤",
+    5:  "創造・恋愛・自己表現・遊び",
+    6:  "健康・日課・奉仕・仕事の細部",
+    7:  "パートナーシップ・対人関係・契約",
+    8:  "変容・共有資源・死と再生・深層心理",
+    9:  "哲学・高等教育・海外・信念",
+    10: "社会的地位・キャリア・公の顔",
+    11: "友人・コミュニティ・夢と理想",
+    12: "潜在意識・隠れた敵・孤独・霊性",
 }
 
+_SIGN_META = {
+    "牡羊座":  {"element": "火", "mode": "活動", "keyword": "行動力と開拓精神"},
+    "牡牛座":  {"element": "地", "mode": "固定", "keyword": "安定と感覚的な豊かさ"},
+    "双子座":  {"element": "風", "mode": "柔軟", "keyword": "知的好奇心と多様性"},
+    "蟹座":    {"element": "水", "mode": "活動", "keyword": "感情の深さと養育"},
+    "獅子座":  {"element": "火", "mode": "固定", "keyword": "誇りと創造的な自己表現"},
+    "乙女座":  {"element": "地", "mode": "柔軟", "keyword": "分析力と誠実な奉仕"},
+    "天秤座":  {"element": "風", "mode": "活動", "keyword": "調和と美的センス"},
+    "蠍座":    {"element": "水", "mode": "固定", "keyword": "深層への洞察と変容"},
+    "射手座":  {"element": "火", "mode": "柔軟", "keyword": "探求心と自由への渇望"},
+    "山羊座":  {"element": "地", "mode": "活動", "keyword": "忍耐と社会的達成"},
+    "水瓶座":  {"element": "風", "mode": "固定", "keyword": "革新と人類への貢献"},
+    "魚座":    {"element": "水", "mode": "柔軟", "keyword": "共感と霊的な溶解"},
+}
+
+_PLANET_MEANING = {
+    "太陽":   "核となる自己・意志・生命力",
+    "月":     "感情・本能・安心感の源",
+    "水星":   "思考・言語・情報処理",
+    "金星":   "愛・美・喜び・価値観",
+    "火星":   "行動力・情熱・欲求・勇気",
+    "木星":   "拡大・幸運・哲学・成長",
+    "土星":   "制限・責任・試練・構造",
+    "天王星": "革命・自由・突然の変化",
+    "海王星": "幻想・霊性・溶解・理想",
+    "冥王星": "変容・破壊と再生・権力",
+    "ドラゴンヘッド": "魂の成長方向・カルマ的テーマ",
+    "キロン": "傷と癒し・師匠としての痛み",
+    "リリス": "抑圧された欲求・本能の影",
+    "セレス": "養育・豊穣・喪失と受容",
+    "ジュノー": "対等なパートナーシップ・契約",
+    "ベスタ": "献身・純粋な集中力・神聖な炎",
+    "パラス": "知恵・戦略・正義の感覚",
+}
+
+_PLANET_IN_HOUSE = {
+    "太陽": ["", "{planet}が第1ハウスに在ります。{h_theme}の場で存在感が強く、人生を自ら切り拓く意志が前面に出ます。", "{planet}が第2ハウスに在ります。{h_theme}を通して自己価値を育て、現実的な安定を築くことがテーマです。", "{planet}が第3ハウスに在ります。{h_theme}の場で言葉と学びが輝き、知的な発信が人生を開きます。", "{planet}が第4ハウスに在ります。{h_theme}に根を張ることで、本来の生命力が安定して発揮されます。", "{planet}が第5ハウスに輝きます。創造・恋愛・遊びの領域で本来の輝きが花開き、表現すること自体が生きがいとなります。", "{planet}が第6ハウスに在ります。{h_theme}を整えるほど自己効力感が高まり、実務の中で光を放ちます。", "{planet}が第7ハウスに在ります。{h_theme}を通じて自己理解が深まり、関係性の中で使命が明確になります。", "{planet}が第8ハウスに在ります。{h_theme}の深みで大きな変容を経験し、再生を繰り返して強くなります。", "{planet}が第9ハウスに在ります。{h_theme}を探求することで視野が広がり、人生哲学が輝きます。", "{planet}が第10ハウスに在ります。{h_theme}で評価されやすく、社会的役割を果たすことが自己実現に直結します。", "{planet}が第11ハウスに在ります。{h_theme}の場で理想を共有し、未来志向のネットワークから力を得ます。", "{planet}が第12ハウスに在ります。{h_theme}の領域で静かな献身が育ち、内面的な統合が人生を導きます。"],
+    "月": ["", "{planet}が第1ハウスに在ります。感情が表情や雰囲気に出やすく、{h_theme}の変化に敏感です。", "{planet}が第2ハウスに在ります。{h_theme}の安定が心の安定に直結し、安心できる基盤づくりを求めます。", "{planet}が第3ハウスに在ります。{h_theme}を通じて気持ちを整理し、対話が心の栄養になります。", "{planet}が第4ハウスに在ります。{h_theme}が人生の最重要テーマとなり、内なる居場所づくりが鍵です。", "{planet}が第5ハウスに在ります。{h_theme}の場で喜びを感じ、愛情表現が心を満たします。", "{planet}が第6ハウスに在ります。{h_theme}を整えることで心身のリズムが回復しやすくなります。", "{planet}が第7ハウスに在ります。{h_theme}で感情が揺れやすく、対話を通じた共感が癒しになります。", "{planet}が第8ハウスに在ります。{h_theme}で感情の深層が刺激され、強い結びつきを求めます。", "{planet}が第9ハウスに在ります。{h_theme}が心を拡張し、旅や学びが感情を浄化します。", "{planet}が第10ハウスに在ります。{h_theme}に感情が反応しやすく、公的役割への責任感が高まります。", "{planet}が第11ハウスに在ります。{h_theme}を通じて仲間意識が育ち、理想を共有する場に安心します。", "{planet}が第12ハウスに在ります。{h_theme}で無意識の感受性が高まり、休息と浄化が重要です。"],
+    "水星": ["", "{planet}が第1ハウスに在ります。{h_theme}で機転の良さが際立ち、言葉で道を切り開きます。", "{planet}が第2ハウスに在ります。{h_theme}に関する情報処理能力が高く、実利的な判断が得意です。", "{planet}が第3ハウスに在ります。{h_theme}で本領発揮し、学習・執筆・会話に強みが出ます。", "{planet}が第4ハウスに在ります。{h_theme}について深く考え、家族観や記憶が思考の土台になります。", "{planet}が第5ハウスに在ります。{h_theme}で創造的な発想が冴え、言葉遊びや表現力が光ります。", "{planet}が第6ハウスに在ります。{h_theme}における分析と改善が得意で、実務での精度が高い配置です。", "{planet}が第7ハウスに在ります。{h_theme}で交渉力が活き、対話から最適解を導きます。", "{planet}が第8ハウスに在ります。{h_theme}の領域で洞察が深まり、心理や秘密を読む力を持ちます。", "{planet}が第9ハウスに在ります。{h_theme}に知性が向かい、専門研究や哲学的思考に適性があります。", "{planet}が第10ハウスに在ります。{h_theme}で情報発信力が評価され、仕事での言語能力が武器です。", "{planet}が第11ハウスに在ります。{h_theme}をネットワーク化し、仲間と知を共有して成果を出します。", "{planet}が第12ハウスに在ります。{h_theme}で直観的な思考が育ち、内省や執筆で才能が開きます。"],
+    "金星": ["", "{planet}が第1ハウスに在ります。{h_theme}に魅力が宿り、自然体で人を惹きつけます。", "{planet}が第2ハウスに在ります。{h_theme}に喜びを見出し、美意識と豊かさを育てます。", "{planet}が第3ハウスに在ります。{h_theme}で愛嬌のある対話が生まれ、言葉が魅力になります。", "{planet}が第4ハウスに在ります。{h_theme}で美と安心を求め、居心地のよい空間づくりが得意です。", "{planet}が第5ハウスに在ります。{h_theme}で恋愛運と創作運が高まり、楽しみながら才能が花開きます。", "{planet}が第6ハウスに在ります。{h_theme}に調和をもたらし、丁寧な日常が幸福感を育てます。", "{planet}が第7ハウスに在ります。{h_theme}で愛と協調がテーマとなり、良縁を引き寄せやすい配置です。", "{planet}が第8ハウスに在ります。{h_theme}で深い結びつきを求め、濃密な愛情体験を通じて変容します。", "{planet}が第9ハウスに在ります。{h_theme}で審美眼が広がり、異文化や学問に喜びを見出します。", "{planet}が第10ハウスに在ります。{h_theme}で好感度と評価が高まり、対人調整力が仕事で活きます。", "{planet}が第11ハウスに在ります。{h_theme}で友愛が広がり、共通の理想を持つ仲間に恵まれます。", "{planet}が第12ハウスに在ります。{h_theme}で静かな優しさが育ち、見えない形で愛を注ぎます。"],
+    "火星": ["", "{planet}が第1ハウスに在ります。{h_theme}で行動力が前面に出て、先陣を切る役割を担います。", "{planet}が第2ハウスに在ります。{h_theme}で稼ぐ力と守る力が強く、現実面で粘り強く戦います。", "{planet}が第3ハウスに在ります。{h_theme}で発言に勢いが宿り、議論や交渉で突破力を発揮します。", "{planet}が第4ハウスに在ります。{h_theme}で防衛本能が強まり、身内を守るための闘志が湧きます。", "{planet}が第5ハウスに在ります。{h_theme}で情熱が燃え、恋愛や創作に積極性が出ます。", "{planet}が第6ハウスに在ります。{h_theme}で実行力が高く、課題処理のスピードが武器になります。", "{planet}が第7ハウスに在ります。{h_theme}で競争心が刺激され、対人関係で主導権争いが起こりやすい配置です。", "{planet}が第8ハウスに在ります。{h_theme}で強い執着と突破力が生まれ、極限状況で真価を発揮します。", "{planet}が第9ハウスに在ります。{h_theme}へ向かう情熱が強く、信念のために行動する力があります。", "{planet}が第10ハウスに在ります。{h_theme}で野心が高まり、キャリアで結果を出す推進力になります。", "{planet}が第11ハウスに在ります。{h_theme}で改革への意欲が高く、集団で先導的に動きます。", "{planet}が第12ハウスに在ります。{h_theme}で怒りや欲求が内面化しやすく、意識的な発散が重要です。"],
+    "木星": ["", "{planet}が第1ハウスに在ります。{h_theme}で楽観性と包容力が広がり、存在そのものが希望を運びます。", "{planet}が第2ハウスに在ります。{h_theme}で発展運が働き、豊かさを拡大しやすい配置です。", "{planet}が第3ハウスに在ります。{h_theme}で学びと交流が発展し、知識が幸運を呼び込みます。", "{planet}が第4ハウスに在ります。{h_theme}で守護が働き、心の基盤を大きく育てていきます。", "{planet}が第5ハウスに在ります。{h_theme}で創造性と喜びが拡大し、恋愛運や表現力に追い風です。", "{planet}が第6ハウスに在ります。{h_theme}で成長機会が増え、仕事や健康習慣の改善が実を結びます。", "{planet}が第7ハウスに在ります。{h_theme}で良縁や援助に恵まれ、協力関係から発展が生まれます。", "{planet}が第8ハウスに在ります。{h_theme}で深い学びが拡大し、心理的・経済的な共有で恩恵があります。", "{planet}が第9ハウスに在ります。{h_theme}で最も力を発揮し、探求・教育・海外運に大きな追い風があります。", "{planet}が第10ハウスに在ります。{h_theme}で社会的成功運が高まり、公的評価を得やすくなります。", "{planet}が第11ハウスに在ります。{h_theme}で夢の実現力が高く、人脈が発展の鍵になります。", "{planet}が第12ハウスに在ります。{h_theme}で見えない加護が働き、慈愛と精神性が深まります。"],
+    "土星": ["", "{planet}が第1ハウスに在ります。{h_theme}で責任感が強く、自己鍛錬を通じて信頼を築きます。", "{planet}が第2ハウスに在ります。{h_theme}で堅実さが求められ、時間をかけて確かな資産を形成します。", "{planet}が第3ハウスに在ります。{h_theme}で思考が慎重になり、学びの継続が大きな成果を生みます。", "{planet}が第4ハウスに在ります。{h_theme}で課題意識が強まり、家族や基盤への責任を学びます。", "{planet}が第5ハウスに在ります。{h_theme}で自己表現に真剣さが増し、努力の末に創造が実を結びます。", "{planet}が第6ハウスに在ります。{h_theme}で規律と忍耐が試され、職人的な完成度へ向かいます。", "{planet}が第7ハウスに在ります。{h_theme}で対人責任が重くなり、成熟した関係を築く学びが進みます。", "{planet}が第8ハウスに在ります。{h_theme}で深い恐れと向き合い、手放しと再構築を学びます。", "{planet}が第9ハウスに在ります。{h_theme}で信念を現実化する試練があり、学問と実践の一致が鍵です。", "{planet}が第10ハウスに在ります。{h_theme}で社会的責任が強まり、遅咲きでも大きな実績を残せます。", "{planet}が第11ハウスに在ります。{h_theme}で理想実現に時間を要しますが、長期的な信頼網を築けます。", "{planet}が第12ハウスに在ります。{h_theme}で内的課題と向き合い、孤独な鍛錬が精神的成熟をもたらします。"],
+}
+
+_ASPECT_INTERP = {
+    'コンジャンクション': (
+        "{orb_label}コンジャンクション：{p1}（{s1}・H{h1}）と{p2}（{s2}・H{h2}）が一点に融合しています。"
+        "{h1_theme}と{h2_theme}の領域が渾然一体となり、強烈な集中力を生み出しています。"
+    ),
+    'オポジション': (
+        "{orb_label}オポジション：{p1}（{s1}・H{h1}）と{p2}（{s2}・H{h2}）が向かい合います。"
+        "{h1_theme}と{h2_theme}の軸で引き合いが生まれ、{s1_kw}と{s2_kw}を統合する成熟が求められます。"
+    ),
+    'トライン': (
+        "{orb_label}トライン：{p1}（{s1}・H{h1}）と{p2}（{s2}・H{h2}）が美しく調和。"
+        "{h1_theme}と{h2_theme}に自然な追い風が流れ、{s1_kw}の資質が才能として活きます。"
+    ),
+    'スクエア': (
+        "{orb_label}スクエア：{p1}（{s1}・H{h1}）と{p2}（{s2}・H{h2}）の間に摩擦が走ります。"
+        "{h1_theme}と{h2_theme}の衝突が課題を照らし、鍛錬を通して大きな成長を促します。"
+    ),
+    'セクスタイル': (
+        "{orb_label}セクスタイル：{p1}（{s1}・H{h1}）と{p2}（{s2}・H{h2}）が協調しています。"
+        "{h1_theme}と{h2_theme}を結ぶ機会が訪れ、主体的に動くほど実りが増します。"
+    ),
+    'クインカンクス（150°）': (
+        "{orb_label}クインカンクス：{p1}（{s1}・H{h1}）と{p2}（{s2}・H{h2}）は調整を求める角度です。"
+        "{h1_theme}と{h2_theme}の再調律を行うことで、新しい均衡点が見えてきます。"
+    ),
+}
 _COMPOSITE_INTERP = {
     'ヨッド':             "「神の指」とも呼ばれるヨッドが形成されています（{planets}）。特別な使命や運命的な課題を示し、頂点の天体が示す領域で深い変容が求められます。",
     'グランドトライン':   "3つの天体（{planets}）が大きな三角形を描くグランドトラインが見られます。豊かな才能と恵みの流れがありますが、その安定ゆえに成長への動機が失われやすい面もあります。",
@@ -718,21 +845,68 @@ def generate_interpretation(
     if asc:
         lines.append(f"アセンダントは{asc['sign']}。世界との接点において、{asc['sign']}の気質が自然と滲み出るでしょう。")
 
+    # 天体×ハウス詳細解釈（差分追加）
+    lines.append("\n【天体の配置と読み解き】")
+    for p_data in natal_chart:
+        pname = p_data['planet']
+        sign  = p_data['sign']
+        house = p_data['house']
+        retro = p_data.get('retrograde', False)
+
+        if pname not in _PLANET_IN_HOUSE:
+            continue
+
+        sign_meta = _SIGN_META.get(sign, {})
+        house_templates = _PLANET_IN_HOUSE.get(pname, [])
+        planet_meaning  = _PLANET_MEANING.get(pname, pname)
+
+        retro_note = "（逆行中：エネルギーが内向きに深化します）" if retro else ""
+        h_text = house_templates[house] if 1 <= house <= 12 and house_templates else ""
+        h_text = h_text.format(planet=pname, sign=sign, h_theme=_HOUSE_THEME.get(house, ""))
+
+        lines.append(f"\n▷ {pname}（{planet_meaning}）　{sign} H{house} {retro_note}")
+        if sign_meta:
+            lines.append(
+                f"  {sign}は{sign_meta['element']}のエレメント・{sign_meta['mode']}の質を持ち、"
+                f"{sign_meta['keyword']}が特徴的です。"
+            )
+        if h_text:
+            lines.append(f"  {h_text}")
+
     # アスペクト解釈（メジャーのみ・最大10件）
     lines.append("\n【惑星同士の対話】")
     major_aspect_names = set(_ASPECT_INTERP.keys())
     interpreted = 0
     for aspects, title in aspects_sets:
-        for asp in aspects:
-            if asp['aspect'] not in major_aspect_names:
-                continue
+        # オーブが小さい順（重要度高い順）にソートして出力（差分変更）
+        sorted_aspects = sorted(
+            [a for a in aspects if a['aspect'] in major_aspect_names],
+            key=lambda x: x['orb']
+        )
+        for asp in sorted_aspects:
             tmpl = _ASPECT_INTERP.get(asp['aspect'])
             if tmpl:
-                lines.append(tmpl.format(p1=asp['planet1'], p2=asp['planet2']))
+                s1_meta = _SIGN_META.get(asp['planet1_sign'], {})
+                s2_meta = _SIGN_META.get(asp['planet2_sign'], {})
+                text = tmpl.format(
+                    orb_label=_orb_label(asp['orb']),
+                    p1=asp['planet1'],
+                    p2=asp['planet2'],
+                    s1=asp['planet1_sign'],
+                    s2=asp['planet2_sign'],
+                    h1=asp['planet1_house'],
+                    h2=asp['planet2_house'],
+                    h1_theme=_HOUSE_THEME.get(asp['planet1_house'], ""),
+                    h2_theme=_HOUSE_THEME.get(asp['planet2_house'], ""),
+                    s1_kw=s1_meta.get('keyword', ''),
+                    s2_kw=s2_meta.get('keyword', ''),
+                )
+                lines.append(f"\n  {text}")
+                lines.append(f"  ※オーブ {asp['orb']:.2f}°（実角度 {asp['exact']:.2f}°）")
                 interpreted += 1
-            if interpreted >= 10:
+            if interpreted >= 12:
                 break
-        if interpreted >= 10:
+        if interpreted >= 12:
             break
     if interpreted == 0:
         lines.append("主要なアスペクトは検出されませんでした。")
@@ -756,6 +930,14 @@ def generate_interpretation(
     return "\n".join(lines)
 
 
+def _build_chart_data_from_config(date_tuple, time_str, tz_offset, lat, lon):
+    """
+    設定ブロックのパラメータからジュリアン日を計算して辞書で返す（差分追加）。
+    """
+    ut = convert_time_to_ut_decimal_hours(time_str, tz_offset)
+    jd = swe.julday(date_tuple[0], date_tuple[1], date_tuple[2], ut)
+    return {'julian_day': jd, 'lat': lat, 'lon': lon}
+
 # =======================
 # 3. 使用例セクション
 # =======================
@@ -765,34 +947,44 @@ if __name__ == "__main__":
         print("=== 三重チャートの計算と表示 ===")
 
         # -----------------------
-        # ネイタルデータ（例）
+        # USE_CONFIG_BLOCK で切り替え（差分追加）
         # -----------------------
-        ntime = convert_time_to_ut_decimal_hours("11:27", 9)
-        natal_data = {
-            'julian_day': swe.julday(1984, 11, 15, ntime),
-            'lat': 37.38,
-            'lon': 140.18
-        }
+        if USE_CONFIG_BLOCK:
+            natal_data    = _build_chart_data_from_config(NATAL_DATE,    NATAL_TIME,    NATAL_TZ,    NATAL_LAT,    NATAL_LON)
+            progress_data = _build_chart_data_from_config(PROGRESS_DATE, PROGRESS_TIME, PROGRESS_TZ, PROGRESS_LAT, PROGRESS_LON)
+            transit_data  = _build_chart_data_from_config(TRANSIT_DATE,  TRANSIT_TIME,  TRANSIT_TZ,  TRANSIT_LAT,  TRANSIT_LON)
+            person_name   = PERSON_NAME
+        else:
+            # -----------------------
+            # ネイタルデータ（例）
+            # -----------------------
+            ntime = convert_time_to_ut_decimal_hours("11:27", 9)
+            natal_data = {
+                'julian_day': swe.julday(1984, 11, 15, ntime),
+                'lat': 37.38,
+                'lon': 140.18
+            }
 
-        # -----------------------
-        # プログレスデータ（例）
-        # -----------------------
-        ptime = convert_time_to_ut_decimal_hours("00:00", 9)
-        progress_data = {
-            'julian_day': swe.julday(1984, 12, 26, ptime),
-            'lat': 37.38,
-            'lon': 140.18
-        }
+            # -----------------------
+            # プログレスデータ（例）
+            # -----------------------
+            ptime = convert_time_to_ut_decimal_hours("00:00", 9)
+            progress_data = {
+                'julian_day': swe.julday(1984, 12, 26, ptime),
+                'lat': 37.38,
+                'lon': 140.18
+            }
 
-        # -----------------------
-        # トランジットデータ（例）
-        # -----------------------
-        ttime = convert_time_to_ut_decimal_hours("00:00", 9)
-        transit_data = {
-            'julian_day': swe.julday(2026, 2, 12, ttime),
-            'lat': 37.38,
-            'lon': 140.18
-        }
+            # -----------------------
+            # トランジットデータ（例）
+            # -----------------------
+            ttime = convert_time_to_ut_decimal_hours("00:00", 9)
+            transit_data = {
+                'julian_day': swe.julday(2026, 2, 12, ttime),
+                'lat': 37.38,
+                'lon': 140.18
+            }
+            person_name = "あなた"
 
         # チャートを計算
         natal_chart, natal_cusps = calculate_astrology_data(
@@ -867,7 +1059,7 @@ if __name__ == "__main__":
             composite_sets=[
                 (calculate_composite_aspects(natal_chart, COMPOSITE_ASPECTS), 'ネイタル複合アスペクト'),
             ],
-            person_name='あなた',
+            person_name=person_name,
         )
         print(interp_text)
         with open('astrology_interpretation.txt', 'w', encoding='utf-8') as f:
@@ -877,26 +1069,32 @@ if __name__ == "__main__":
     elif mode == 'synastry':
         print("=== シナストリーの計算と表示 ===")
 
-        # -----------------------
-        # 二人分のネイタルデータ（例）
-        # -----------------------
-        time_str1 = "11:27"
-        timezone_offset1 = 9
-        ut_time1 = convert_time_to_ut_decimal_hours(time_str1, timezone_offset1)
-        person1_data = {
-            'julian_day': swe.julday(1984, 11, 15, ut_time1),
-            'lat': 37.38,
-            'lon': 140.18
-        }
+        if USE_CONFIG_BLOCK:
+            person1_data = _build_chart_data_from_config(NATAL_DATE,   NATAL_TIME,   NATAL_TZ,   NATAL_LAT,   NATAL_LON)
+            person2_data = _build_chart_data_from_config(PERSON2_DATE, PERSON2_TIME, PERSON2_TZ, PERSON2_LAT, PERSON2_LON)
+            person_name  = PERSON_NAME
+        else:
+            # -----------------------
+            # 二人分のネイタルデータ（例）
+            # -----------------------
+            time_str1 = "11:27"
+            timezone_offset1 = 9
+            ut_time1 = convert_time_to_ut_decimal_hours(time_str1, timezone_offset1)
+            person1_data = {
+                'julian_day': swe.julday(1984, 11, 15, ut_time1),
+                'lat': 37.38,
+                'lon': 140.18
+            }
 
-        time_str2 = "00:00"
-        timezone_offset2 = 9
-        ut_time2 = convert_time_to_ut_decimal_hours(time_str2, timezone_offset2)
-        person2_data = {
-            'julian_day': swe.julday(1967, 5, 13, ut_time2),
-            'lat': 35.68,
-            'lon': 139.65
-        }
+            time_str2 = "00:00"
+            timezone_offset2 = 9
+            ut_time2 = convert_time_to_ut_decimal_hours(time_str2, timezone_offset2)
+            person2_data = {
+                'julian_day': swe.julday(1967, 5, 13, ut_time2),
+                'lat': 35.68,
+                'lon': 139.65
+            }
+            person_name = "二人の関係"
 
         # 二人分のチャート計算
         person1_chart, person1_cusps = calculate_astrology_data(
@@ -953,7 +1151,7 @@ if __name__ == "__main__":
             composite_sets=[
                 (composite_patterns_synastry, 'シナストリー複合アスペクト'),
             ],
-            person_name='二人の関係',
+            person_name=person_name,
         )
         print(interp_text)
         with open('astrology_interpretation.txt', 'w', encoding='utf-8') as f:
