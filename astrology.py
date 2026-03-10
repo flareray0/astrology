@@ -1,3 +1,4 @@
+import os
 import swisseph as swe
 from datetime import datetime
 from itertools import combinations
@@ -130,8 +131,8 @@ hsys = 'K'
 # モードの指定（'triple_chart' または 'synastry'）
 mode = 'triple_chart'
 
-# エフェメリスのパスを設定
-swe.set_ephe_path(r'/content/drive/MyDrive/ephe')
+# エフェメリスのパスを設定（Webアプリから環境変数で切り替え可能）
+swe.set_ephe_path(os.getenv('ASTROLOGY_EPHE_PATH', r'/content/drive/MyDrive/ephe'))
 
 # 複合アスペクト検出から除外する天体・感受点（標準的占星術慣習に基づく）
 # ASC/DSC/MC/IC は出生時刻誤差の影響が大きいため除外

@@ -1,0 +1,6 @@
+body { font-family: sans-serif; margin: 2rem; background: #fafafa; }
+.container { max-width: 800px; margin: 0 auto; background: white; padding: 1.5rem; border-radius: 8px; }
+form { display: grid; gap: 0.6rem; }
+label { display: grid; gap: 0.2rem; }
+button { width: 200px; padding: 0.6rem; }
+pre { background: #111; color: #9ef; padding: 1rem; white-space: pre-wrap; }
