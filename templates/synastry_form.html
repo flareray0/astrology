@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>相性診断入力</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+<main class="container">
+  <h1>相性診断入力</h1>
+  <form id="synastryForm">
+    <h2>Person1</h2>
+    <label>名前 <input name="person1_name" value="Person A"></label>
+    <label>生年月日 <input name="person1_date" type="date" required></label>
+    <label>出生時刻 <input name="person1_time" value="11:27" required></label>
+    <label>TZ <input name="person1_timezone" type="number" value="9" required></label>
+    <label>緯度 <input name="person1_lat" type="number" step="0.01" value="35.68" required></label>
+    <label>経度 <input name="person1_lon" type="number" step="0.01" value="139.65" required></label>
+    <h2>Person2</h2>
+    <label>名前 <input name="person2_name" value="Person B"></label>
+    <label>生年月日 <input name="person2_date" type="date" required></label>
+    <label>出生時刻 <input name="person2_time" value="00:00" required></label>
+    <label>TZ <input name="person2_timezone" type="number" value="9" required></label>
+    <label>緯度 <input name="person2_lat" type="number" step="0.01" value="34.69" required></label>
+    <label>経度 <input name="person2_lon" type="number" step="0.01" value="135.5" required></label>
+    <button type="submit">診断する</button>
+  </form>
+  <pre id="result"></pre>
+</main>
+<script src="/static/app.js"></script>
+</body>
+</html>
