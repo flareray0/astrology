@@ -817,6 +817,11 @@ NODE_NORMALIZE_RULES = {
     "トゥルーテール": {"alias_group": "node_tail", "priority": 1},
 }
 
+# True Node / Mean Node 系の重複を抑制する設定。
+# False: 同一系統は優先順位の高い1つのみ表示
+# True : ノード変種をそのまま残す
+SHOW_TRUE_NODE_VARIANTS = False
+
 MAIN_INTERPRET_PLANETS = {"太陽", "月", "アセンダント", "水星", "金星", "火星", "木星", "土星"}
 
 PLANET_ARCHETYPE = {
@@ -846,6 +851,13 @@ PLANET_SIGN_MEANING = {
     ("火星", "牡羊座"): "行動力が先陣を切る形で現れ、瞬発力と突破力が武器になります",
     ("木星", "魚座"): "成長は共感と精神性を媒介に拡大し、包容力が幸運を招きます",
     ("土星", "山羊座"): "責任感と構造化能力が高まり、遅くても確実な成果を築きます",
+    ("太陽", "蠍座"): "意志が深層・変容・極限のテーマへ向かい、真実を掘り当てる力が高まります",
+    ("月", "蟹座"): "感情は保護と養育の欲求を強く帯び、安心できる居場所で回復します",
+    ("水星", "双子座"): "思考は多面的で俊敏になり、比較・翻訳・接続の才が伸びます",
+    ("金星", "天秤座"): "愛情と価値観は調和と美意識を求め、関係性の質を整える力になります",
+    ("火星", "蠍座"): "行動力は一点集中と底力として現れ、決めた目標を徹底的に遂行します",
+    ("木星", "射手座"): "成長意欲は探求と理想へ開かれ、学びを拡張して可能性を広げます",
+    ("アセンダント", "牡羊座"): "第一印象は率直で先駆的に映り、開始力のある人物像を作ります",
 }
 
 PLANET_HOUSE_MEANING = {
@@ -863,6 +875,9 @@ PLANET_PAIR_MEANING = {
     frozenset(["金星", "火星"]): "愛情と欲求の推進力",
     frozenset(["木星", "土星"]): "拡大と収束のバランス",
     frozenset(["月", "リリス"]): "安心欲求と抑圧本能の接触",
+    frozenset(["火星", "木星"]): "挑戦心と拡張意欲の増幅",
+    frozenset(["月", "冥王星"]): "感情の深層変容と再生力",
+    frozenset(["月", "天王星"]): "情緒の自由化と変化衝動",
 }
 
 ASPECT_MEANING = {
@@ -877,6 +892,9 @@ ASPECT_MEANING = {
 
 def normalize_node_objects(chart: list[dict]) -> list[dict]:
     """ノード系の重複を優先順位ベースで正規化する。"""
+    if SHOW_TRUE_NODE_VARIANTS:
+        return chart
+
     grouped: dict[str, dict] = {}
     passthrough: list[dict] = []
     for obj in chart:
@@ -946,15 +964,51 @@ def detect_stellium(chart: list[dict]) -> list[str]:
     return outputs
 
 
-def synthesize_planet_sign_house(p: dict) -> str:
+def detect_house_cluster(chart: list[dict]) -> list[str]:
+    """同一ハウスへの主要天体集中を抽出する。"""
+    major = [p for p in chart if p.get("planet") in MAIN_INTERPRET_PLANETS]
+    house_map: dict[int, list[str]] = {}
+    for p in major:
+        house_map.setdefault(p.get("house"), []).append(p["planet"])
+    outputs: list[str] = []
+    for house, planets in house_map.items():
+        uniq = sorted(set(planets))
+        if house and len(uniq) >= 3:
+            outputs.append(f"第{house}ハウス集中（{', '.join(uniq)}）")
+    return outputs
+
+
+def synthesize_planet_sign(p: dict, suppress_redundant: bool = False) -> str:
+    """Planet × Sign の読みを返す。"""
+    planet = p.get("planet", "")
+    sign = p.get("sign", "")
+    if suppress_redundant:
+        return f"{planet}は{sign}の色を帯びます"
+    return PLANET_SIGN_MEANING.get(
+        (planet, sign),
+        f"{PLANET_ARCHETYPE.get(planet, planet)}が{SIGN_ARCHETYPE.get(sign, sign)}へ向かいます",
+    )
+
+
+def synthesize_planet_house(p: dict) -> str:
+    """Planet × House の読みを返す。"""
+    planet = p.get("planet", "")
+    house = p.get("house", 0)
+    return PLANET_HOUSE_MEANING.get(
+        (planet, house),
+        f"{PLANET_ARCHETYPE.get(planet, planet)}は第{house}ハウス（{HOUSE_ARCHETYPE.get(house, '')}）で具体化されます",
+    )
+
+
+def synthesize_planet_sign_house(p: dict, suppress_sign_detail: bool = False) -> str:
     """Planet × Sign × House を統合文として生成する。"""
     planet = p.get("planet", "")
     sign = p.get("sign", "")
     house = p.get("house", 0)
     retro = "逆行で内省的に働きやすく" if p.get("retrograde") else "順行で外向きに発揮されやすく"
 
-    ps = PLANET_SIGN_MEANING.get((planet, sign), f"{PLANET_ARCHETYPE.get(planet, planet)}が{SIGN_ARCHETYPE.get(sign, sign)}の質を帯び")
-    ph = PLANET_HOUSE_MEANING.get((planet, house), f"主戦場は第{house}ハウス（{HOUSE_ARCHETYPE.get(house, '')}）です")
+    ps = synthesize_planet_sign(p, suppress_redundant=suppress_sign_detail)
+    ph = synthesize_planet_house(p)
     return f"{planet} {sign} H{house}は、{ps}、{ph}。この配置は{retro}作用します。"
 
 
@@ -978,11 +1032,13 @@ def synthesize_aspect(asp: dict) -> str:
     aspect = asp.get("aspect")
     pair_theme = PLANET_PAIR_MEANING.get(frozenset([p1, p2]), f"{p1}と{p2}のエネルギー交換")
     aspect_theme = ASPECT_MEANING.get(aspect, "固有の学習テーマを持つ角度")
+    orb = float(asp.get("orb", 99.0))
+    orb_hint = _orb_label(orb)
     sign_hint = f"{asp.get('planet1_sign')}×{asp.get('planet2_sign')}"
     house_hint = f"H{asp.get('planet1_house')}↔H{asp.get('planet2_house')}"
     return (
         f"{p1} {aspect} {p2}: {pair_theme}が作動。{aspect_theme}。"
-        f"サイン修飾は{sign_hint}、領域は{house_hint}で現れます。"
+        f"{orb_hint}オーブ（{orb:.2f}°）で、サイン修飾は{sign_hint}、領域は{house_hint}で現れます。"
     )
 
 
@@ -998,39 +1054,51 @@ def generate_interpretation(
         f"＊ {person_name}の星読みレポート ＊",
         f"生成日時: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
         "=" * 60,
-        "\n【人物の中心テーマ】",
+        "\n【核 / 人生テーマ】",
     ]
 
     sun = next((p for p in chart if p.get("planet") == "太陽"), None)
     moon = next((p for p in chart if p.get("planet") == "月"), None)
     asc = next((p for p in chart if p.get("planet") == "アセンダント"), None)
 
+    seen_signs: set[str] = set()
+
     if sun:
         lines.append(f"- この人の核: {synthesize_planet_sign_house(sun)}")
+        seen_signs.add(sun.get("sign"))
     if moon:
-        lines.append(f"- 感情の基盤: {synthesize_planet_sign_house(moon)}")
+        lines.append(f"- 感情の基盤: {synthesize_planet_sign_house(moon, suppress_sign_detail=moon.get('sign') in seen_signs)}")
+        seen_signs.add(moon.get("sign"))
     if asc:
-        lines.append(f"- 社会への出力: {synthesize_planet_sign_house(asc)}")
+        lines.append(f"- 社会への出力: {synthesize_planet_sign_house(asc, suppress_sign_detail=asc.get('sign') in seen_signs)}")
+        seen_signs.add(asc.get("sign"))
 
     lines.append(f"- 全体バランス: {summarize_element_mode_balance(chart)}")
 
     stelliums = detect_stellium(chart)
+    house_clusters = detect_house_cluster(chart)
     if stelliums:
         lines.append("- 集中配置:")
         for s in stelliums:
             lines.append(f"  ・{s}")
+    if house_clusters:
+        lines.append("- ハウスクラスター:")
+        for s in house_clusters:
+            lines.append(f"  ・{s}")
 
-    lines.append("\n【感情と対人傾向】")
+    lines.append("\n【資質（感情と対人傾向）】")
     for pname in ["月", "金星", "火星"]:
         p = next((obj for obj in chart if obj.get("planet") == pname), None)
         if p:
-            lines.append(f"- {synthesize_planet_sign_house(p)}")
+            lines.append(f"- {synthesize_planet_sign_house(p, suppress_sign_detail=p.get('sign') in seen_signs)}")
+            seen_signs.add(p.get("sign"))
 
     lines.append("\n【思考・行動・価値観】")
     for pname in ["水星", "火星", "木星", "土星"]:
         p = next((obj for obj in chart if obj.get("planet") == pname), None)
         if p:
-            lines.append(f"- {synthesize_planet_sign_house(p)}")
+            lines.append(f"- {synthesize_planet_sign_house(p, suppress_sign_detail=p.get('sign') in seen_signs)}")
+            seen_signs.add(p.get("sign"))
 
     major_aspects = []
     for aspects, _title in aspects_sets:
@@ -1048,7 +1116,7 @@ def generate_interpretation(
     if talent_count == 0:
         lines.append("- 調和アスペクトが少ないため、才能は経験を通じて後天的に開花する傾向です。")
 
-    lines.append("\n【緊張・課題（葛藤しやすいテーマ）】")
+    lines.append("\n【課題（葛藤しやすいテーマ）】")
     tension_count = 0
     for asp in major_aspects:
         if asp.get("aspect") in {"スクエア", "オポジション", "クインカンクス（150°）"}:
@@ -1071,7 +1139,7 @@ def generate_interpretation(
     if not any_composite:
         lines.append("- 今回は主要な複合配置は検出されませんでした。")
 
-    lines.append("\n【統合メッセージ / 総括】")
+    lines.append("\n【統合ポイント / 総括】")
     lines.append("- 人生課題 / 統合ポイント: 『核となる意志（太陽）・感情の安全基地（月）・社会への出力（ASC）』の3点を同時に満たす設計が開運の鍵です。")
     lines.append("- 実装ヒント: 調和アスペクトで得た強みを、緊張アスペクトの課題領域へ意識的に転用すると、才能が成果へ変換されます。")
 
