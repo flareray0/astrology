@@ -128,8 +128,20 @@ include_composite_aspects = True # 複合アスペクトを含める場合はTru
 # 使用するハウスシステムの指定（例：コッホハウス）
 hsys = 'K'
 
-# モードの指定（'triple_chart' または 'synastry'）
-mode = 'triple_chart'
+# チャート種別の指定
+CHART_TYPE_LABELS = {
+    "natal": "ネイタルチャート（出生図）",
+    "progressed": "プログレス（二次進行）",
+    "transit": "トランジット（現在の運行）",
+    "triple": "トリプルチャート（ネイタル＋プログレス＋トランジット）",
+    "synastry": "シナストリー（相性）",
+}
+
+LEGACY_MODE_ALIASES = {
+    "triple_chart": "triple",
+}
+
+chart_mode = "triple"
 
 # エフェメリスのパスを設定（Webアプリから環境変数で切り替え可能）
 swe.set_ephe_path(os.getenv('ASTROLOGY_EPHE_PATH', r'/content/drive/MyDrive/ephe'))
@@ -1289,22 +1301,52 @@ def _aspect_priority_score(asp: dict) -> tuple:
     return (-major_count, orb, rarity_bonus)
 
 
-def generate_interpretation(
+def generate_report_header(
+    chart_mode: str,
+    person_name: str = "あなた",
+    target_datetime: str | None = None,
+    target_location: str | None = None,
+    person2_name: str | None = None,
+    target_datetime2: str | None = None,
+    target_location2: str | None = None,
+) -> list[str]:
+    label = CHART_TYPE_LABELS.get(chart_mode, chart_mode)
+    lines = [
+        f"＊ {person_name}の星読みレポート ＊" if chart_mode != "synastry" else f"＊ {person_name} × {person2_name or '相手'} 相性レポート ＊",
+        f"生成日時: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        f"チャート種別: {label}",
+    ]
+    if target_datetime:
+        lines.append(f"対象日時: {target_datetime}")
+    if target_location:
+        lines.append(f"対象地点: {target_location}")
+    if chart_mode == "synastry":
+        if target_datetime2:
+            lines.append(f"相手の対象日時: {target_datetime2}")
+        if target_location2:
+            lines.append(f"相手の対象地点: {target_location2}")
+    if chart_mode == "triple":
+        lines.append("統合対象: ネイタル（核）＋プログレス（内面変化）＋トランジット（外的時期性）")
+    lines.append("=" * 60)
+    return lines
+
+
+def _build_natal_style_interpretation(
     natal_chart: list,
     aspects_sets: list,
     composite_sets: list,
     person_name: str = "あなた",
+    header_lines: list[str] | None = None,
 ) -> str:
-    """象徴合成レイヤーを用いた解釈テキストを生成する。"""
     chart = normalize_node_objects(natal_chart)
     recent_templates: dict[str, str] = {}
     used_hints: set[str] = set()
-    lines = [
+    lines = header_lines[:] if header_lines else [
         f"＊ {person_name}の星読みレポート ＊",
         f"生成日時: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
         "=" * 60,
-        "\n【核 / 人生テーマ】",
     ]
+    lines.append("\n【核 / 人生テーマ】")
 
     sun = next((p for p in chart if p.get("planet") == "太陽"), None)
     moon = next((p for p in chart if p.get("planet") == "月"), None)
@@ -1367,11 +1409,11 @@ def generate_interpretation(
     for composites, _title in composite_sets:
         deduped_composites.extend(dedupe_composite_patterns(composites))
     for comp in dedupe_composite_patterns(deduped_composites):
-            tmpl = _COMPOSITE_INTERP.get(comp.get("type"))
-            if tmpl:
-                planets = "・".join(comp.get("planets", []))
-                lines.append(f"- {tmpl.format(planets=planets)}")
-                any_composite = True
+        tmpl = _COMPOSITE_INTERP.get(comp.get("type"))
+        if tmpl:
+            planets = "・".join(comp.get("planets", []))
+            lines.append(f"- {tmpl.format(planets=planets)}")
+            any_composite = True
     if not any_composite:
         lines.append("- 今回は主要な複合配置は検出されませんでした。")
 
@@ -1383,6 +1425,166 @@ def generate_interpretation(
     lines.append("\n" + "=" * 60)
     lines.append("※このレポートは天体配置に基づく自動生成テキストです。")
     return "\n".join(lines)
+
+
+SYN_PRIORITY_PAIRS = [
+    frozenset(["太陽", "月"]),
+    frozenset(["金星", "火星"]),
+    frozenset(["月", "土星"]),
+    frozenset(["月", "冥王星"]),
+    frozenset(["月", "天王星"]),
+    frozenset(["水星", "月"]),
+    frozenset(["金星", "土星"]),
+    frozenset(["太陽", "土星"]),
+    frozenset(["太陽", "金星"]),
+    frozenset(["火星", "土星"]),
+]
+
+
+def synthesize_synastry_aspect(asp: dict) -> str:
+    p1, p2 = asp.get("planet1"), asp.get("planet2")
+    aspect = asp.get("aspect")
+    orb = float(asp.get("orb", 99.0))
+    if aspect in {"コンジャンクション", "トライン", "セクスタイル"}:
+        tone = "引き合う力が自然に働きやすく"
+    elif aspect in {"スクエア", "オポジション", "クインカンクス（150°）"}:
+        tone = "惹かれ合う一方で緊張も強まりやすく"
+    else:
+        tone = "独特の化学反応が生まれやすく"
+    return f"{p1} {aspect} {p2}（オーブ{orb:.2f}°）: この関係では、{tone}、2人の間でテーマが強く意識化される配置です。"
+
+
+def _syn_house_overlay(chart1: list[dict], cusps1: list[float], chart2: list[dict]) -> list[str]:
+    targets = {"太陽", "月", "金星", "火星"}
+    lines = []
+    for obj in chart2:
+        if obj.get("planet") not in targets:
+            continue
+        house = get_house(float(obj.get("lon", 0.0)), cusps1)
+        if house in {4, 7, 8, 10}:
+            lines.append(f"- 相手の{obj.get('planet')}があなたの第{house}ハウスを刺激し、関係性の重要領域が活性化しやすいでしょう。")
+    return lines[:4]
+
+
+def generate_synastry_interpretation(
+    person1_chart: list,
+    person2_chart: list,
+    synastry_aspects: list,
+    person1_name: str = "あなた",
+    person2_name: str = "相手",
+    person1_cusps: list[float] | None = None,
+) -> str:
+    lines = generate_report_header("synastry", person_name=person1_name, person2_name=person2_name)
+    lines.append("\n【基本相性】")
+    selected = [a for a in dedupe_aspects(synastry_aspects) if frozenset([a.get("planet1"), a.get("planet2")]) in SYN_PRIORITY_PAIRS]
+    selected = sorted(selected, key=lambda x: (SYN_PRIORITY_PAIRS.index(frozenset([x.get("planet1"), x.get("planet2")])) if frozenset([x.get("planet1"), x.get("planet2")]) in SYN_PRIORITY_PAIRS else 99, float(x.get("orb", 99.0))))
+    for asp in selected[:5]:
+        lines.append(f"- {synthesize_synastry_aspect(asp)}")
+    if not selected:
+        lines.append("- この関係では、派手さよりも日常の積み重ねで相互理解が育つ流れです。")
+
+    lines.append("\n【感情相性】")
+    lines.append("- 2人の間では、安心感と刺激のバランスが整うほど本音の共有が進みやすいでしょう。")
+    lines.append("- 相手はあなたに対して反応が早くなりやすく、言葉選びの質が関係満足度を左右します。")
+
+    lines.append("\n【恋愛 / attraction】")
+    lines.append("- お互いの魅力が噛み合う場面では、短時間でも一気に距離が縮まりやすい組み合わせです。")
+
+    lines.append("\n【摩擦 / 課題】")
+    lines.append("- この関係では、期待値のすり合わせを先送りすると誤解の反動が大きくなりやすいでしょう。")
+
+    lines.append("\n【長期安定性】")
+    lines.append("- 役割分担と連絡頻度のルールを明文化すると、関係の再現性と安心感が高まります。")
+
+    lines.append("\n【成長テーマ】")
+    lines.append("- お互いの違いを矯正対象ではなく拡張資産として扱うと、この関係の成長速度が上がります。")
+
+    if person1_cusps:
+        overlays = _syn_house_overlay(person1_chart, person1_cusps, person2_chart)
+        if overlays:
+            lines.append("\n【ハウスオーバーレイ】")
+            lines.extend(overlays)
+
+    lines.append("\n" + "=" * 60)
+    lines.append("※この相性レポートは2人の天体配置に基づく自動生成テキストです。")
+    return "\n".join(lines)
+
+
+def generate_progressed_interpretation(chart: list, aspects_sets: list, composite_sets: list, person_name: str = "あなた") -> str:
+    header = generate_report_header("progressed", person_name=person_name)
+    base = _build_natal_style_interpretation(chart, aspects_sets, composite_sets, person_name, header)
+    return base + "\n\n【プログレス視点の補足】\n- 以前よりも内面の成熟テーマが前景化し、価値観の更新が進みやすい時期です。\n- 今は外側の成果より、内側の納得感を育てる選択が長期的な推進力になります。"
+
+
+def generate_transit_interpretation(chart: list, aspects_sets: list, composite_sets: list, person_name: str = "あなた") -> str:
+    header = generate_report_header("transit", person_name=person_name)
+    base = _build_natal_style_interpretation(chart, aspects_sets, composite_sets, person_name, header)
+    return base + "\n\n【トランジット視点の補足】\n- 今は外的刺激が増えやすく、数週間〜数か月で環境変化の波が出やすい時期です。\n- 今の流れに乗るには、短期の試行回数を増やして反応の良い行動を残すのが有効です。"
+
+
+def generate_triple_interpretation(natal_chart: list, progress_chart: list, transit_chart: list, aspect_sets: list, person_name: str = "あなた") -> str:
+    header = generate_report_header("triple", person_name=person_name)
+    lines = header + [
+        "\n【生まれ持った核（ネイタル）】",
+        f"- {summarize_element_mode_balance(normalize_node_objects(natal_chart))}",
+        "\n【今の内面的変化（プログレス）】",
+        f"- {summarize_element_mode_balance(normalize_node_objects(progress_chart))}",
+        "\n【今の外的刺激 / 時期性（トランジット）】",
+        f"- ネイタルとの接点アスペクトは{sum(len(a[0]) for a in aspect_sets)}件で、今は反応速度が求められる局面です。",
+        "\n【統合：今どう動くと良いか】",
+        "- 核となる強みは維持しつつ、内面の変化に合う行動へ小さく更新するほど運の巡りが整います。",
+        "- 予定表に『深掘りする時間』と『外界に触れる時間』を同時に確保すると、三層の流れが噛み合います。",
+        "\n" + "=" * 60,
+        "※このトリプルレポートは3種類のチャート統合に基づく自動生成テキストです。",
+    ]
+    return "\n".join(lines)
+
+
+def generate_natal_interpretation(natal_chart: list, aspects_sets: list, composite_sets: list, person_name: str = "あなた") -> str:
+    return _build_natal_style_interpretation(
+        natal_chart,
+        aspects_sets,
+        composite_sets,
+        person_name,
+        generate_report_header("natal", person_name=person_name),
+    )
+
+
+def generate_interpretation(
+    natal_chart: list,
+    aspects_sets: list,
+    composite_sets: list,
+    person_name: str = "あなた",
+    chart_mode: str = "natal",
+    context: dict | None = None,
+) -> str:
+    mode = LEGACY_MODE_ALIASES.get(chart_mode, chart_mode)
+    context = context or {}
+    if mode == "natal":
+        return generate_natal_interpretation(natal_chart, aspects_sets, composite_sets, person_name)
+    if mode == "progressed":
+        return generate_progressed_interpretation(natal_chart, aspects_sets, composite_sets, person_name)
+    if mode == "transit":
+        return generate_transit_interpretation(natal_chart, aspects_sets, composite_sets, person_name)
+    if mode == "triple":
+        return generate_triple_interpretation(
+            natal_chart=context.get("natal_chart", natal_chart),
+            progress_chart=context.get("progress_chart", natal_chart),
+            transit_chart=context.get("transit_chart", natal_chart),
+            aspect_sets=aspects_sets,
+            person_name=person_name,
+        )
+    if mode == "synastry":
+        return generate_synastry_interpretation(
+            person1_chart=context.get("person1_chart", natal_chart),
+            person2_chart=context.get("person2_chart", []),
+            synastry_aspects=context.get("synastry_aspects", aspects_sets[0][0] if aspects_sets else []),
+            person1_name=person_name,
+            person2_name=context.get("person2_name", "相手"),
+            person1_cusps=context.get("person1_cusps"),
+        )
+    raise ValueError(f"未対応の chart_mode: {chart_mode}")
+
 
 def _build_chart_data_from_config(date_tuple, time_str, tz_offset, lat, lon):
     """
@@ -1397,220 +1599,56 @@ def _build_chart_data_from_config(date_tuple, time_str, tz_offset, lat, lon):
 # =======================
 
 if __name__ == "__main__":
-    if mode == 'triple_chart':
-        print("=== 三重チャートの計算と表示 ===")
+    mode = LEGACY_MODE_ALIASES.get(chart_mode, chart_mode)
+    if mode not in CHART_TYPE_LABELS:
+        raise ValueError(f"無効な chart_mode です: {chart_mode}")
 
-        # -----------------------
-        # USE_CONFIG_BLOCK で切り替え（差分追加）
-        # -----------------------
-        if USE_CONFIG_BLOCK:
-            natal_data    = _build_chart_data_from_config(NATAL_DATE,    NATAL_TIME,    NATAL_TZ,    NATAL_LAT,    NATAL_LON)
-            progress_data = _build_chart_data_from_config(PROGRESS_DATE, PROGRESS_TIME, PROGRESS_TZ, PROGRESS_LAT, PROGRESS_LON)
-            transit_data  = _build_chart_data_from_config(TRANSIT_DATE,  TRANSIT_TIME,  TRANSIT_TZ,  TRANSIT_LAT,  TRANSIT_LON)
-            person_name   = PERSON_NAME
-        else:
-            # -----------------------
-            # ネイタルデータ（例）
-            # -----------------------
-            ntime = convert_time_to_ut_decimal_hours("11:27", 9)
-            natal_data = {
-                'julian_day': swe.julday(1984, 11, 15, ntime),
-                'lat': 37.38,
-                'lon': 140.18
-            }
+    natal_data = _build_chart_data_from_config(NATAL_DATE, NATAL_TIME, NATAL_TZ, NATAL_LAT, NATAL_LON)
+    progress_data = _build_chart_data_from_config(PROGRESS_DATE, PROGRESS_TIME, PROGRESS_TZ, PROGRESS_LAT, PROGRESS_LON)
+    transit_data = _build_chart_data_from_config(TRANSIT_DATE, TRANSIT_TIME, TRANSIT_TZ, TRANSIT_LAT, TRANSIT_LON)
+    person2_data = _build_chart_data_from_config(PERSON2_DATE, PERSON2_TIME, PERSON2_TZ, PERSON2_LAT, PERSON2_LON)
 
-            # -----------------------
-            # プログレスデータ（例）
-            # -----------------------
-            ptime = convert_time_to_ut_decimal_hours("00:00", 9)
-            progress_data = {
-                'julian_day': swe.julday(1984, 12, 26, ptime),
-                'lat': 37.38,
-                'lon': 140.18
-            }
+    natal_chart, natal_cusps = calculate_astrology_data(natal_data['julian_day'], natal_data['lat'], natal_data['lon'], hsys=hsys, include_asteroids=include_asteroids)
+    progress_chart, _ = calculate_astrology_data(progress_data['julian_day'], progress_data['lat'], progress_data['lon'], hsys=hsys, include_asteroids=include_asteroids)
+    transit_chart, _ = calculate_astrology_data(transit_data['julian_day'], transit_data['lat'], transit_data['lon'], hsys=hsys, include_asteroids=include_asteroids)
+    person2_chart, _ = calculate_astrology_data(person2_data['julian_day'], person2_data['lat'], person2_data['lon'], hsys=hsys, include_asteroids=include_asteroids)
 
-            # -----------------------
-            # トランジットデータ（例）
-            # -----------------------
-            ttime = convert_time_to_ut_decimal_hours("00:00", 9)
-            transit_data = {
-                'julian_day': swe.julday(2026, 2, 12, ttime),
-                'lat': 37.38,
-                'lon': 140.18
-            }
-            person_name = "あなた"
-
-        # チャートを計算
-        natal_chart, natal_cusps = calculate_astrology_data(
-            natal_data['julian_day'], natal_data['lat'], natal_data['lon'],
-            hsys=hsys, include_asteroids=include_asteroids
-        )
-        progress_chart, progress_cusps = calculate_astrology_data(
-            progress_data['julian_day'], progress_data['lat'], progress_data['lon'],
-            hsys=hsys, include_asteroids=include_asteroids
-        )
-        transit_chart, transit_cusps = calculate_astrology_data(
-            transit_data['julian_day'], transit_data['lat'], transit_data['lon'],
-            hsys=hsys, include_asteroids=include_asteroids
-        )
-
-        # アスペクト計算（natal vs natalなど）
-        natal_natal_aspects = calculate_aspects(natal_chart, natal_chart, include_minor_aspects)
-        natal_progress_aspects = calculate_aspects(natal_chart, progress_chart, include_minor_aspects)
-        natal_transit_aspects = calculate_aspects(natal_chart, transit_chart, include_minor_aspects)
-        progress_progress_aspects = calculate_aspects(progress_chart, progress_chart, include_minor_aspects)
-        progress_transit_aspects = calculate_aspects(progress_chart, transit_chart, include_minor_aspects)
-        transit_transit_aspects = calculate_aspects(transit_chart, transit_chart, include_minor_aspects)
-
-        # 結果表示
-        print_chart(natal_chart, "ネイタルチャート")
-        print_chart(progress_chart, "プログレスチャート")
-        print_chart(transit_chart, "トランジットチャート")
-
-        # ハウスカスプ例
-        print_house_cusps(natal_cusps, "ネイタル")
-        print_house_cusps(progress_cusps, "プログレス")
-        print_house_cusps(transit_cusps, "トランジット")
-
-        # アスペクトの出力例
-        aspect_sets = [
-            (natal_natal_aspects, "ネイタルチャート内のアスペクト"),
-            (natal_progress_aspects, "ネイタルとプログレスのアスペクト"),
-            (natal_transit_aspects, "ネイタルとトランジットのアスペクト"),
-            #(progress_progress_aspects, "プログレスチャート内のアスペクト"),
-            (progress_transit_aspects, "プログレスとトランジットのアスペクト"),
-            #(transit_transit_aspects, "トランジットチャート内のアスペクト"),
+    if mode == 'natal':
+        aspects = calculate_aspects(natal_chart, natal_chart, include_minor_aspects=include_minor_aspects)
+        composites = calculate_composite_aspects(natal_chart, COMPOSITE_ASPECTS) if include_composite_aspects else []
+        interp_text = generate_interpretation(natal_chart, [(aspects, 'ネイタル')], [(composites, '複合')], person_name=PERSON_NAME, chart_mode='natal')
+    elif mode == 'progressed':
+        aspects = calculate_aspects(natal_chart, progress_chart, include_minor_aspects=include_minor_aspects)
+        interp_text = generate_interpretation(progress_chart, [(aspects, 'ネイタル×プログレス')], [], person_name=PERSON_NAME, chart_mode='progressed')
+    elif mode == 'transit':
+        aspects = calculate_aspects(natal_chart, transit_chart, include_minor_aspects=include_minor_aspects)
+        interp_text = generate_interpretation(transit_chart, [(aspects, 'ネイタル×トランジット')], [], person_name=PERSON_NAME, chart_mode='transit')
+    elif mode == 'triple':
+        aspects = [
+            (calculate_aspects(natal_chart, natal_chart, include_minor_aspects=include_minor_aspects), 'ネイタル内'),
+            (calculate_aspects(natal_chart, progress_chart, include_minor_aspects=include_minor_aspects), 'ネイタル×プログレス'),
+            (calculate_aspects(natal_chart, transit_chart, include_minor_aspects=include_minor_aspects), 'ネイタル×トランジット'),
         ]
-        for aspects, aspect_title in aspect_sets:
-            print_aspects(aspects, aspect_title)
-
-        # --- 結果テキスト保存（差分追加） ---
-        save_results_to_text(
-            charts={
-                'ネイタルチャート': natal_chart,
-                'プログレスチャート': progress_chart,
-                'トランジットチャート': transit_chart,
-            },
-            aspects_sets=[
-                (natal_natal_aspects,    'ネイタルチャート内のアスペクト'),
-                (natal_progress_aspects, 'ネイタルとプログレスのアスペクト'),
-                (natal_transit_aspects,  'ネイタルとトランジットのアスペクト'),
-                (progress_transit_aspects, 'プログレスとトランジットのアスペクト'),
-            ],
-            composite_sets=[
-                (calculate_composite_aspects(natal_chart, COMPOSITE_ASPECTS), 'ネイタル複合アスペクト'),
-            ],
-            filepath='astrology_result.txt',
-        )
-
-        # --- 占い師文体レポート生成（差分追加） ---
         interp_text = generate_interpretation(
-            natal_chart=natal_chart,
-            aspects_sets=[
-                (natal_natal_aspects,    'ネイタルチャート内のアスペクト'),
-                (natal_transit_aspects,  'ネイタルとトランジットのアスペクト'),
-            ],
-            composite_sets=[
-                (calculate_composite_aspects(natal_chart, COMPOSITE_ASPECTS), 'ネイタル複合アスペクト'),
-            ],
-            person_name=person_name,
+            natal_chart,
+            aspects,
+            [],
+            person_name=PERSON_NAME,
+            chart_mode='triple',
+            context={'natal_chart': natal_chart, 'progress_chart': progress_chart, 'transit_chart': transit_chart},
         )
-        print(interp_text)
-        with open('astrology_interpretation.txt', 'w', encoding='utf-8') as f:
-            f.write(interp_text)
-        print("[SAVE] 解釈レポートを保存しました: astrology_interpretation.txt")
-
-    elif mode == 'synastry':
-        print("=== シナストリーの計算と表示 ===")
-
-        if USE_CONFIG_BLOCK:
-            person1_data = _build_chart_data_from_config(NATAL_DATE,   NATAL_TIME,   NATAL_TZ,   NATAL_LAT,   NATAL_LON)
-            person2_data = _build_chart_data_from_config(PERSON2_DATE, PERSON2_TIME, PERSON2_TZ, PERSON2_LAT, PERSON2_LON)
-            person_name  = PERSON_NAME
-        else:
-            # -----------------------
-            # 二人分のネイタルデータ（例）
-            # -----------------------
-            time_str1 = "11:27"
-            timezone_offset1 = 9
-            ut_time1 = convert_time_to_ut_decimal_hours(time_str1, timezone_offset1)
-            person1_data = {
-                'julian_day': swe.julday(1984, 11, 15, ut_time1),
-                'lat': 37.38,
-                'lon': 140.18
-            }
-
-            time_str2 = "00:00"
-            timezone_offset2 = 9
-            ut_time2 = convert_time_to_ut_decimal_hours(time_str2, timezone_offset2)
-            person2_data = {
-                'julian_day': swe.julday(1967, 5, 13, ut_time2),
-                'lat': 35.68,
-                'lon': 139.65
-            }
-            person_name = "二人の関係"
-
-        # 二人分のチャート計算
-        person1_chart, person1_cusps = calculate_astrology_data(
-            person1_data['julian_day'], person1_data['lat'], person1_data['lon'],
-            hsys=hsys, include_asteroids=include_asteroids
-        )
-        person2_chart, person2_cusps = calculate_astrology_data(
-            person2_data['julian_day'], person2_data['lat'], person2_data['lon'],
-            hsys=hsys, include_asteroids=include_asteroids
-        )
-
-        # シナストリーアスペクト
-        synastry_aspects = calculate_aspects(
-            person1_chart, person2_chart, include_minor_aspects=include_minor_aspects
-        )
-
-        # 複合アスペクト（必要に応じて実装）
-        composite_patterns_synastry = []
-        if include_composite_aspects:
-            combined_chart = person1_chart + person2_chart
-            composite_patterns_synastry = calculate_composite_aspects(
-                combined_chart, COMPOSITE_ASPECTS
-            )
-
-        # 出力
-        print_chart(person1_chart, "俺のネイタルチャート")
-        print_chart(person2_chart, "相手のネイタルチャート")
-        print_aspects(synastry_aspects, "シナストリーアスペクト")
-
-        if include_composite_aspects:
-            print_composite_aspects(composite_patterns_synastry, "シナストリー")
-
-        # --- 結果テキスト保存（差分追加） ---
-        save_results_to_text(
-            charts={
-                '俺のネイタルチャート': person1_chart,
-                '相手のネイタルチャート': person2_chart,
-            },
-            aspects_sets=[
-                (synastry_aspects, 'シナストリーアスペクト'),
-            ],
-            composite_sets=[
-                (composite_patterns_synastry, 'シナストリー複合アスペクト'),
-            ],
-            filepath='astrology_result.txt',
-        )
-
-        # --- 占い師文体レポート生成（差分追加） ---
-        interp_text = generate_interpretation(
-            natal_chart=person1_chart,
-            aspects_sets=[
-                (synastry_aspects, 'シナストリーアスペクト'),
-            ],
-            composite_sets=[
-                (composite_patterns_synastry, 'シナストリー複合アスペクト'),
-            ],
-            person_name=person_name,
-        )
-        print(interp_text)
-        with open('astrology_interpretation.txt', 'w', encoding='utf-8') as f:
-            f.write(interp_text)
-        print("[SAVE] 解釈レポートを保存しました: astrology_interpretation.txt")
-
     else:
-        print("無効なモードが指定されています。'triple_chart' か 'synastry' を指定してください。")
+        syn = calculate_aspects(natal_chart, person2_chart, include_minor_aspects=include_minor_aspects)
+        interp_text = generate_interpretation(
+            natal_chart,
+            [(syn, 'シナストリー')],
+            [],
+            person_name=PERSON_NAME,
+            chart_mode='synastry',
+            context={'person1_chart': natal_chart, 'person2_chart': person2_chart, 'synastry_aspects': syn, 'person2_name': '相手', 'person1_cusps': natal_cusps},
+        )
+
+    print(interp_text)
+    with open('astrology_interpretation.txt', 'w', encoding='utf-8') as f:
+        f.write(interp_text)
+    print('[SAVE] 解釈レポートを保存しました: astrology_interpretation.txt')

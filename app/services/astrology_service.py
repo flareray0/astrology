@@ -47,18 +47,52 @@ class AstrologyService:
         composites = astrology.calculate_composite_aspects(chart1 + chart2, astrology.COMPOSITE_ASPECTS)
         return {"chart": chart1 + chart2, "aspects": aspects, "composite_aspects": composites}
 
+
+    def calculate_progressed(self, natal: BirthInput, progressed: BirthInput) -> dict:
+        natal_chart, _ = self.build_chart(natal)
+        progressed_chart, _ = self.build_chart(progressed)
+        aspects = astrology.calculate_aspects(natal_chart, progressed_chart, settings.include_minor_aspects)
+        return {"chart": progressed_chart, "aspects": aspects, "composite_aspects": []}
+
+    def calculate_triple(self, natal: BirthInput, progressed: BirthInput, transit: BirthInput) -> dict:
+        natal_chart, _ = self.build_chart(natal)
+        progressed_chart, _ = self.build_chart(progressed)
+        transit_chart, _ = self.build_chart(transit)
+        aspects = [
+            (astrology.calculate_aspects(natal_chart, natal_chart, settings.include_minor_aspects), "ネイタル内"),
+            (astrology.calculate_aspects(natal_chart, progressed_chart, settings.include_minor_aspects), "ネイタル×プログレス"),
+            (astrology.calculate_aspects(natal_chart, transit_chart, settings.include_minor_aspects), "ネイタル×トランジット"),
+        ]
+        return {
+            "chart": natal_chart + progressed_chart + transit_chart,
+            "aspects": [a for pair in aspects for a in pair[0]],
+            "composite_aspects": [],
+            "aspect_sets": aspects,
+            "context": {"natal_chart": natal_chart, "progress_chart": progressed_chart, "transit_chart": transit_chart},
+        }
+
     def calculate_transit(self, natal: BirthInput, transit: BirthInput) -> dict:
         natal_chart, _ = self.build_chart(natal)
         transit_chart, _ = self.build_chart(transit)
         aspects = astrology.calculate_aspects(natal_chart, transit_chart, settings.include_minor_aspects)
         return {"chart": natal_chart + transit_chart, "aspects": aspects, "composite_aspects": []}
 
-    def generate_interpretation(self, person_name: str, chart: list[dict], aspects: list[dict], composites: list[dict]) -> str:
+    def generate_interpretation(
+        self,
+        person_name: str,
+        chart: list[dict],
+        aspects: list[dict],
+        composites: list[dict],
+        chart_mode: str = "natal",
+        context: dict | None = None,
+    ) -> str:
         return astrology.generate_interpretation(
             natal_chart=chart,
             aspects_sets=[(aspects, "自動生成アスペクト")],
             composite_sets=[(composites, "自動生成複合アスペクト")],
             person_name=person_name,
+            chart_mode=chart_mode,
+            context=context or {},
         )
 
     def export_result(self, payload: dict) -> str:

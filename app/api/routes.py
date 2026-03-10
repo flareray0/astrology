@@ -6,11 +6,13 @@ from app.core.exceptions import AstrologyError
 from app.schemas import (
     ChartResponse,
     NatalChartRequest,
+    ProgressedRequest,
     ReportRenderRequest,
     ReportRenderResponse,
     ResultResponse,
     SynastryRequest,
     TransitRequest,
+    TripleRequest,
 )
 from app.services.astrology_service import astrology_service
 
@@ -52,14 +54,36 @@ def transit_chart(req: TransitRequest) -> ChartResponse:
         result = astrology_service.calculate_transit(req.natal, req.transit)
         payload = {"type": "transit", "person_name": req.person_name, **result}
         result_id = astrology_service.export_result(payload)
-        return ChartResponse(result_id=result_id, **result)
+        return ChartResponse(result_id=result_id, chart=result["chart"], aspects=result["aspects"], composite_aspects=result["composite_aspects"])
+    except AstrologyError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.post("/api/chart/progressed", response_model=ChartResponse)
+def progressed_chart(req: ProgressedRequest) -> ChartResponse:
+    try:
+        result = astrology_service.calculate_progressed(req.natal, req.progressed)
+        payload = {"type": "progressed", "person_name": req.person_name, **result}
+        result_id = astrology_service.export_result(payload)
+        return ChartResponse(result_id=result_id, chart=result["chart"], aspects=result["aspects"], composite_aspects=result["composite_aspects"])
+    except AstrologyError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+
+@router.post("/api/chart/triple", response_model=ChartResponse)
+def triple_chart(req: TripleRequest) -> ChartResponse:
+    try:
+        result = astrology_service.calculate_triple(req.natal, req.progressed, req.transit)
+        payload = {"type": "triple", "person_name": req.person_name, **result}
+        result_id = astrology_service.export_result(payload)
+        return ChartResponse(result_id=result_id, chart=result["chart"], aspects=result["aspects"], composite_aspects=result["composite_aspects"])
     except AstrologyError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
 
 @router.post("/api/report/render", response_model=ReportRenderResponse)
 def render_report(req: ReportRenderRequest) -> ReportRenderResponse:
-    report = astrology_service.generate_interpretation(req.person_name, req.chart, req.aspects, req.composites)
+    report = astrology_service.generate_interpretation(req.person_name, req.chart, req.aspects, req.composites, req.chart_mode, req.context)
     return ReportRenderResponse(report_text=report)
 
 
