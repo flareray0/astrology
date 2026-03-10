@@ -1,10 +1,6 @@
-
-!pip install pyswisseph
 import swisseph as swe
 from datetime import datetime
 from itertools import combinations
-from google.colab import drive
-drive.mount('/content/drive')
 
 # =======================
 # 1. 設定セクション
@@ -107,7 +103,12 @@ def convert_time_to_ut_decimal_hours(time_str, timezone_offset_hours):
     ローカル時刻（HH:MM形式）と時差を用いて、UTC時間を小数時間で返します。
     """
     time_format = "%H:%M"
-    time_obj = datetime.strptime(time_str, time_format)
+    try:
+        time_obj = datetime.strptime(time_str, time_format)
+    except ValueError as error:
+        raise ValueError(
+            f"time_str は HH:MM（24時間表記）で指定してください。入力値: {time_str}"
+        ) from error
     local_hour = time_obj.hour
     local_minute = time_obj.minute
 
@@ -122,16 +123,17 @@ def get_house(lon, cusps):
     """
     指定された経度がどのハウスに属するかを判定します。
     """
+    epsilon = 1e-9
     lon = lon % 360.0
     for i in range(1, 13):
         cusp_start = cusps[i] % 360.0
         cusp_end = cusps[i + 1] % 360.0 if i < 12 else cusps[1] % 360.0
         if cusp_start <= cusp_end:
-            if cusp_start <= lon < cusp_end:
+            if cusp_start - epsilon <= lon < cusp_end + epsilon:
                 return i
         else:
             # 360度をまたぐ場合
-            if lon >= cusp_start or lon < cusp_end:
+            if lon >= cusp_start - epsilon or lon < cusp_end + epsilon:
                 return i
     return 12
 
@@ -289,15 +291,24 @@ def calculate_astrology_data(julian_day, lat, lon, hsys='P', include_asteroids=T
 
     return astrology_data, cusps
 
-def calculate_aspects(astro_data1, astro_data2, include_minor_aspects=True):
+def calculate_aspects(
+    astro_data1,
+    astro_data2,
+    include_minor_aspects=True,
+    deduplicate_when_same_chart=True,
+):
     """
     二つの天体データセット間のアスペクトを計算します。
     """
     aspects = []
-    for planet1 in astro_data1:
-        for planet2 in astro_data2:
-            if planet1['planet'] == planet2['planet']:
-                continue
+    same_chart_comparison = deduplicate_when_same_chart and astro_data1 is astro_data2
+
+    if same_chart_comparison:
+        pair_iter = combinations(astro_data1, 2)
+    else:
+        pair_iter = ((planet1, planet2) for planet1 in astro_data1 for planet2 in astro_data2)
+
+    for planet1, planet2 in pair_iter:
             # 特別なポイント同士のアスペクトは除外
             special_points = [
                 'アセンダント', 'ディセンダント',
@@ -345,8 +356,8 @@ def calculate_aspects(astro_data1, astro_data2, include_minor_aspects=True):
 
 def calculate_composite_aspects(astro_data, composite_aspects_def):
     """
-    複合アスペクト（ヨッド、グランドクロス等）を検出する場合は実装を追加。
-    ここでは簡易的に空のリストを返すだけ。
+    複合アスペクト（ヨッド、グランドクロス等）は現在未実装。
+    将来的に実装するまで、常に空リストを返します。
     """
     composite_found = []
     return composite_found
