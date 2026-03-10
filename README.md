@@ -1,159 +1,149 @@
 # astrology MVP (FastAPI)
 
-## 1. 現状把握
-このリポジトリは `astrology.py` に占星術エンジンが集約され、Swiss Ephemeris を使った以下が実装されています。
-- ネイタル計算
-- シナストリー
-- トランジット
-- メジャー / マイナーアスペクト
-- 複合アスペクト検出
-- テキスト保存
-- 解釈レポート生成
+この README は **「まずローカルで FastAPI MVP が起動し、主要エンドポイントが疎通するか」** を最優先にした最小手順です。
 
-今回のMVPでは、この既存ロジックを再利用し、FastAPI + HTMLフォームから実行できる最小Webアプリを追加しました。
-
-## 2. 問題点
-- 単一スクリプト構造で API 化されていない
-- 結果取得のID管理がない
-- 入力バリデーションが弱い
-- ephemeris パスが環境に依存
-
-## 3. 技術設計（概要）
-詳細は [`docs/technical_design.md`](docs/technical_design.md) を参照してください。
-
-- Backend: FastAPI / Pydantic
-- Core: 既存 `astrology.py` を `app/services/astrology_service.py` から呼び出し
-- Frontend: Jinja2 + fetch
-- Storage: `data/results/*.json`
-- Env: `.env` 経由で ephemeris パス切替
-
-## 4. ディレクトリ構成案（今回反映済み）
-```text
-.
-├─ app/
-│  ├─ api/
-│  ├─ core/
-│  ├─ services/
-│  ├─ main.py
-│  └─ schemas.py
-├─ templates/
-├─ static/
-├─ data/
-│  └─ results/
-├─ tests/
-├─ scripts/
-├─ docs/
-├─ astrology.py
-├─ Dockerfile
-├─ docker-compose.yml
-├─ .env.example
-└─ README.md
-```
-
-## 5. API設計（MVP）
-
-### GET /health
-- response: `{"status":"ok"}`
-
-### POST /api/chart/natal
-```bash
-curl -X POST http://localhost:8000/api/chart/natal \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "person_name":"あなた",
-    "birth":{"date":"1984-11-15","time":"11:27","timezone":9,"lat":37.38,"lon":140.18}
-  }'
-```
-
-### POST /api/chart/synastry
-```bash
-curl -X POST http://localhost:8000/api/chart/synastry \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "person1_name":"A","person2_name":"B",
-    "person1":{"date":"1984-11-15","time":"11:27","timezone":9,"lat":37.38,"lon":140.18},
-    "person2":{"date":"1967-05-13","time":"00:00","timezone":9,"lat":35.68,"lon":139.65}
-  }'
-```
-
-### POST /api/chart/transit
-```bash
-curl -X POST http://localhost:8000/api/chart/transit \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "person_name":"あなた",
-    "natal":{"date":"1984-11-15","time":"11:27","timezone":9,"lat":37.38,"lon":140.18},
-    "transit":{"date":"2026-02-12","time":"00:00","timezone":9,"lat":37.38,"lon":140.18}
-  }'
-```
-
-### POST /api/report/render
-```bash
-curl -X POST http://localhost:8000/api/report/render \
-  -H 'Content-Type: application/json' \
-  -d '{"person_name":"あなた","chart":[],"aspects":[],"composites":[]}'
-```
-
-### GET /result/{id}
-```bash
-curl http://localhost:8000/result/<result_id>
-```
-
-## 6. 実装コードのたたき台
-- 起動: `app/main.py`
-- ルーティング: `app/api/routes.py`
-- スキーマ: `app/schemas.py`
-- サービス: `app/services/astrology_service.py`
-- テンプレート: `templates/*.html`
-- 設定: `app/core/config.py`, `.env.example`
-- Docker: `Dockerfile`, `docker-compose.yml`
-
-## 7. 実行手順
-
-### 必要パッケージ
+## 0. 前提
 - Python 3.11+
-- `requirements.txt` のライブラリ
+- `pip` が利用可能
+- このリポジトリ直下で作業
 
-### ephemeris ファイルの置き場所
-- デフォルト: `./data/ephe`
-- 変更時: `.env` の `ASTROLOGY_EPHE_PATH` を更新
+---
 
-### ローカル起動方法
+## 1. 依存関係の確認
+
 ```bash
-cp .env.example .env
+python --version
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload
 ```
 
-### Docker起動
+`requirements.txt` は以下を前提としています（FastAPI/uvicorn/Jinja2/Pydantic/Swiss Ephemeris）。
+
+---
+
+## 2. ephemeris 配置前提の確認
+
+本アプリは `ASTROLOGY_EPHE_PATH`（既定値: `./data/ephe`）を Swiss Ephemeris の参照先に使います。
+
 ```bash
-docker compose up --build
+cp .env.example .env
+mkdir -p data/ephe data/results
 ```
 
-### ブラウザ確認
-- `http://localhost:8000/`
-- `http://localhost:8000/form/natal`
-- `http://localhost:8000/form/synastry`
+- 既定値のまま使う場合は `data/ephe` に ephemeris ファイルを配置
+- 変更する場合は `.env` の `ASTROLOGY_EPHE_PATH` を実パスへ更新
+- 小惑星（Eros/Persephone）計算に必要なデータが不足している場合、該当天体はスキップされる可能性があります
 
-## 8. 残課題 / 次ステップ
+---
 
-### 今回実装済み
-- FastAPI API
-- HTML入力フォーム
-- 結果JSON保存
-- 解釈レポートAPI
-- Docker/環境変数対応
+## 3. ローカル起動手順（最小）
 
-### 次にやるべきこと
-- SQLite repository層追加
-- `/api/report/render` のテンプレート選択式
-- 結果HTMLレンダリング整備
-- 単体テスト拡充
+初回 clone 直後にまとめて準備する場合（推奨）:
 
-### 本番前に必要なこと
-- PostgreSQL移行
-- 非同期ジョブ化（計算キュー）
-- 監視・ログ・リトライ
-- 決済Webhook連携（技術実装のみ）
+```bash
+bash scripts/setup_vps.sh
+```
+
+手動で行う場合:
+
+```bash
+source .venv/bin/activate
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+または:
+
+```bash
+source .venv/bin/activate
+bash scripts/run_local.sh
+```
+
+---
+
+## 4. `/health` の疎通確認
+
+別ターミナルで:
+
+```bash
+curl -sS http://127.0.0.1:8000/health
+```
+
+期待値:
+
+```json
+{"status":"ok"}
+```
+
+---
+
+## 5. `/form/natal` の画面確認
+
+ブラウザで以下を開く:
+
+- `http://127.0.0.1:8000/form/natal`
+
+CLI で最低限確認する場合:
+
+```bash
+curl -I http://127.0.0.1:8000/form/natal
+```
+
+`HTTP/1.1 200 OK` なら到達できています。
+
+---
+
+## 6. `/api/chart/natal` のサンプルリクエスト確認
+
+```bash
+curl -sS -X POST http://127.0.0.1:8000/api/chart/natal \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "person_name": "あなた",
+    "birth": {
+      "date": "1984-11-15",
+      "time": "11:27",
+      "timezone": 9,
+      "lat": 37.38,
+      "lon": 140.18
+    }
+  }'
+```
+
+期待値:
+- HTTP 200
+- `result_id`, `chart`, `aspects`, `composite_aspects` を含む JSON
+
+---
+
+## 7. 起動時に詰まりやすい箇所（先回りチェック）
+
+1. **依存パッケージ未導入**
+   - 症状: `ModuleNotFoundError: fastapi` など
+   - 対応: 仮想環境を有効化して `pip install -r requirements.txt` を再実行
+
+2. **ephemeris パス不整合**
+   - 症状: 計算結果が不完全、または天体計算エラー
+   - 対応: `.env` の `ASTROLOGY_EPHE_PATH` と実ファイル配置先を一致させる
+
+3. **ポート競合（8000）**
+   - 症状: `Address already in use`
+   - 対応: 別ポート起動（例: `--port 8001`）
+
+4. **入力フォーマット不正（特に `time`）**
+   - 症状: 422 Unprocessable Entity
+   - 対応: `time` は必ず `HH:MM`（24時間表記）
+
+5. **`data/results` 未作成時の書き込み失敗**
+   - 対応: `mkdir -p data/results`（通常は起動時に自動生成されますが、先に作成しておくと安全）
+
+---
+
+## 8. 補足（MVP の確認対象）
+
+- ヘルスチェック: `GET /health`
+- 入力画面: `GET /form/natal`, `GET /form/synastry`
+- API: `POST /api/chart/natal`, `POST /api/chart/synastry`, `POST /api/chart/transit`
+- 結果参照: `GET /result/{result_id}`, `GET /result/{result_id}/view`
+
+「まず動くか確認する」目的では、**`/health` → `/form/natal` → `/api/chart/natal`** の順で確認するのが最短です。
