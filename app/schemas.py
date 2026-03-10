@@ -40,11 +40,26 @@ class TransitRequest(BaseModel):
     transit: BirthInput
 
 
+class ProgressedRequest(BaseModel):
+    person_name: str = "あなた"
+    natal: BirthInput
+    progressed: BirthInput
+
+
+class TripleRequest(BaseModel):
+    person_name: str = "あなた"
+    natal: BirthInput
+    progressed: BirthInput
+    transit: BirthInput
+
+
 class ReportRenderRequest(BaseModel):
     person_name: str = "あなた"
+    chart_mode: str = "natal"
     chart: list[dict]
     aspects: list[dict]
     composites: list[dict] = []
+    context: dict = {}
 
 
 class ChartResponse(BaseModel):
