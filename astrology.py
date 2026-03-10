@@ -148,6 +148,28 @@ COMPOSITE_SKIP = {
     'トゥルーテール',
 }
 
+# ノード軸の表示・正規化設定
+# - "true": トゥルーノード系を代表採用（デフォルト）
+# - "mean": Meanノード系を代表採用
+# - "merged": 「ノード軸（ヘッド/テール）」として統合
+NODE_MODE = "true"
+
+# ノード軸の定義的アスペクト（常に出やすい組み合わせ）を表示するか
+SHOW_STRUCTURAL_NODE_ASPECTS = False
+
+NODE_NORMALIZE_RULES = {
+    "ドラゴンヘッド": {"alias_group": "node_head", "mode": "mean", "merged": "ノード軸ヘッド"},
+    "トゥルーノード": {"alias_group": "node_head", "mode": "true", "merged": "ノード軸ヘッド"},
+    "ドラゴンテール": {"alias_group": "node_tail", "mode": "mean", "merged": "ノード軸テール"},
+    "トゥルーテール": {"alias_group": "node_tail", "mode": "true", "merged": "ノード軸テール"},
+}
+
+STRUCTURAL_ASPECT_KEYS = {
+    ("node_head", "オポジション", "node_tail"),
+    ("node_head", "コンジャンクション", "node_head"),
+    ("node_tail", "コンジャンクション", "node_tail"),
+}
+
 # =======================
 # 2. 関数定義セクション
 # =======================
@@ -378,6 +400,8 @@ def calculate_aspects(
         # メジャーアスペクト
         for aspect, (aspect_degree, orb) in MAJOR_ASPECTS.items():
             if abs(diff - aspect_degree) <= orb:
+                if (not SHOW_STRUCTURAL_NODE_ASPECTS) and is_structural_aspect(planet1['planet'], aspect, planet2['planet']):
+                    continue
                 aspects.append({
                     'planet1': planet1['planet'],
                     'planet2': planet2['planet'],
@@ -395,6 +419,8 @@ def calculate_aspects(
         if include_minor_aspects:
             for aspect, (aspect_degree, orb) in MINOR_ASPECTS.items():
                 if abs(diff - aspect_degree) <= orb:
+                    if (not SHOW_STRUCTURAL_NODE_ASPECTS) and is_structural_aspect(planet1['planet'], aspect, planet2['planet']):
+                        continue
                     aspects.append({
                         'planet1': planet1['planet'],
                         'planet2': planet2['planet'],
@@ -417,8 +443,9 @@ def calculate_composite_aspects(astro_data, composite_aspects_def):
     COMPOSITE_SKIP に含まれる感受点は除外します。
     """
     composite_found = []
+    normalized_data = normalize_node_objects(astro_data)
     # 標準的占星術慣習に基づくフィルタリング
-    filtered = [p for p in astro_data if p['planet'] not in COMPOSITE_SKIP]
+    filtered = [p for p in normalized_data if p['planet'] not in COMPOSITE_SKIP]
 
     def angular_diff(p1, p2):
         diff = abs(p1['longitude'] - p2['longitude'])
@@ -556,7 +583,7 @@ def calculate_composite_aspects(astro_data, composite_aspects_def):
                     if is_aspect(outlet, p1, 60, orb) and is_aspect(outlet, p2, 60, orb):
                         add_pattern(jp_name, [apex, p1, p2, outlet], {'構成': 'Tスクエア + セクスタイル出口1'})
 
-    return composite_found
+    return dedupe_composite_patterns(composite_found)
 def get_aspect_between(p1, p2, orb):
     """
     二つの惑星データからアスペクトを判定（使いたい場合に実装）。
@@ -810,17 +837,6 @@ _COMPOSITE_INTERP = {
     'ヴェース':           "ヴェース（{planets}）が示すパターンがあります。Tスクエアの緊張に出口が与えられ、問題解決への道筋が自然に開きます。",
 }
 
-NODE_NORMALIZE_RULES = {
-    "ドラゴンヘッド": {"alias_group": "node_head", "priority": 2},
-    "トゥルーノード": {"alias_group": "node_head", "priority": 1},
-    "ドラゴンテール": {"alias_group": "node_tail", "priority": 2},
-    "トゥルーテール": {"alias_group": "node_tail", "priority": 1},
-}
-
-# True Node / Mean Node 系の重複を抑制する設定。
-# False: 同一系統は優先順位の高い1つのみ表示
-# True : ノード変種をそのまま残す
-SHOW_TRUE_NODE_VARIANTS = False
 
 MAIN_INTERPRET_PLANETS = {"太陽", "月", "アセンダント", "水星", "金星", "火星", "木星", "土星"}
 
@@ -890,10 +906,40 @@ ASPECT_MEANING = {
 }
 
 
+def normalize_node_name(name: str) -> str:
+    """ノード系名称を正規化キーへ変換。"""
+    rule = NODE_NORMALIZE_RULES.get(name)
+    return rule["alias_group"] if rule else name
+
+
+def normalize_planet_name_for_display(name: str) -> str:
+    """表示名を NODE_MODE に応じて整形。"""
+    rule = NODE_NORMALIZE_RULES.get(name)
+    if not rule:
+        return name
+    if NODE_MODE == "merged":
+        return rule["merged"]
+    return name
+
+
+def normalize_planet_name_for_patterns(name: str) -> str:
+    """複合配置の重複判定に使う正規化名。"""
+    if name in NODE_NORMALIZE_RULES:
+        return NODE_NORMALIZE_RULES[name]["alias_group"]
+    return name
+
+
+def is_structural_aspect(planet1: str, aspect: str, planet2: str) -> bool:
+    """定義上ほぼ必然のノード系アスペクトかを判定。"""
+    n1, n2 = normalize_node_name(planet1), normalize_node_name(planet2)
+    key = tuple(sorted([n1, n2]))
+    return (key[0], aspect, key[1]) in STRUCTURAL_ASPECT_KEYS
+
+
 def normalize_node_objects(chart: list[dict]) -> list[dict]:
-    """ノード系の重複を優先順位ベースで正規化する。"""
-    if SHOW_TRUE_NODE_VARIANTS:
-        return chart
+    """NODE_MODE に応じてノード系の表示対象を統合する。"""
+    if NODE_MODE not in {"true", "mean", "merged"}:
+        raise ValueError(f"NODE_MODE must be one of true|mean|merged, got: {NODE_MODE}")
 
     grouped: dict[str, dict] = {}
     passthrough: list[dict] = []
@@ -903,15 +949,52 @@ def normalize_node_objects(chart: list[dict]) -> list[dict]:
             passthrough.append(obj)
             continue
         key = rule["alias_group"]
-        prev = grouped.get(key)
-        if not prev:
-            grouped[key] = obj
+        if NODE_MODE == "merged":
+            candidate = dict(obj)
+            candidate["planet"] = rule["merged"]
+            grouped.setdefault(key, candidate)
             continue
-        prev_pri = NODE_NORMALIZE_RULES[prev["planet"]]["priority"]
-        if rule["priority"] > prev_pri:
+        if rule["mode"] == NODE_MODE:
             grouped[key] = obj
-    normalized = passthrough + list(grouped.values())
-    return normalized
+
+    return passthrough + list(grouped.values())
+
+
+def _aspect_display_key(asp: dict) -> tuple:
+    p1 = normalize_planet_name_for_patterns(asp.get("planet1"))
+    p2 = normalize_planet_name_for_patterns(asp.get("planet2"))
+    ordered = tuple(sorted([p1, p2]))
+    return (ordered[0], asp.get("aspect"), ordered[1])
+
+
+def dedupe_aspects(aspects: list[dict]) -> list[dict]:
+    """同義に近いアスペクトを表示キー単位で集約（最小オーブ優先）。"""
+    best: dict[tuple, dict] = {}
+    for asp in aspects:
+        if (not SHOW_STRUCTURAL_NODE_ASPECTS) and is_structural_aspect(asp.get("planet1"), asp.get("aspect"), asp.get("planet2")):
+            continue
+        key = _aspect_display_key(asp)
+        prev = best.get(key)
+        if not prev or asp.get("orb", 999) < prev.get("orb", 999):
+            chosen = dict(asp)
+            chosen["planet1"] = normalize_planet_name_for_display(chosen.get("planet1"))
+            chosen["planet2"] = normalize_planet_name_for_display(chosen.get("planet2"))
+            best[key] = chosen
+    return sorted(best.values(), key=lambda x: (x.get("orb", 999), x.get("aspect", "")))
+
+
+def dedupe_composite_patterns(composites: list[dict]) -> list[dict]:
+    """複合配置をノード近似重複込みで代表1件に集約。"""
+    best: dict[tuple, dict] = {}
+    for comp in composites:
+        normalized_planets = sorted(normalize_planet_name_for_patterns(p) for p in comp.get("planets", []))
+        key = (comp.get("type"), tuple(normalized_planets))
+        prev = best.get(key)
+        if prev is None or len(comp.get("planets", [])) < len(prev.get("planets", [])):
+            item = dict(comp)
+            item["planets"] = [normalize_planet_name_for_display(p) for p in comp.get("planets", [])]
+            best[key] = item
+    return list(best.values())
 
 
 def summarize_element_mode_balance(chart: list[dict]) -> str:
@@ -990,14 +1073,65 @@ def synthesize_planet_sign(p: dict, suppress_redundant: bool = False) -> str:
     )
 
 
-def synthesize_planet_house(p: dict) -> str:
+def synthesize_planet_house(p: dict, recent_templates: dict[str, str] | None = None) -> str:
     """Planet × House の読みを返す。"""
     planet = p.get("planet", "")
     house = p.get("house", 0)
-    return PLANET_HOUSE_MEANING.get(
-        (planet, house),
-        f"第{house}ハウス（{HOUSE_ARCHETYPE.get(house, '')}）でその力が日常に現れます",
-    )
+    preset = PLANET_HOUSE_MEANING.get((planet, house))
+    if preset:
+        return preset
+    theme = HOUSE_ARCHETYPE.get(house, "")
+    if recent_templates is None:
+        return f"第{house}ハウス（{theme}）で、その力が具体化しやすいでしょう"
+    template = choose_non_repeating_template(HOUSE_SENTENCE_VARIATIONS, "house_sentence", recent_templates)
+    return template.format(house=house, theme=theme)
+
+
+ENDING_VARIATIONS = [
+    "この配置は、実践の中で輪郭がはっきりしてきます。",
+    "取り組みを重ねるほど、この資質の使い方が洗練されます。",
+    "経験を通じて強みが育ちやすい配置です。",
+    "日々の選択の積み重ねが、この力を本領へ導きます。",
+]
+
+HOUSE_SENTENCE_VARIATIONS = [
+    "第{house}ハウス（{theme}）で、その力が具体化しやすいでしょう。",
+    "第{house}ハウス（{theme}）の場面で、本領が見えやすくなります。",
+    "第{house}ハウス（{theme}）を通じて、資質が育ちやすい配置です。",
+]
+
+ACTION_HINT_VARIATIONS = [
+    "活かし方のヒント: {hint}",
+    "実践のコツ: {hint}",
+    "行動提案: {hint}",
+]
+
+
+def choose_non_repeating_template(candidates: list[str], key: str, recent: dict[str, str]) -> str:
+    if not candidates:
+        return ""
+    prev = recent.get(key)
+    for c in candidates:
+        if c != prev:
+            recent[key] = c
+            return c
+    chosen = candidates[0]
+    recent[key] = chosen
+    return chosen
+
+
+def choose_non_repeating_action_hint(hints: list[str], used_hints: set[str], limit: int = 1) -> list[str]:
+    out = []
+    for hint in hints:
+        if hint in used_hints:
+            continue
+        used_hints.add(hint)
+        out.append(hint)
+        if len(out) >= limit:
+            break
+    if not out and hints:
+        out.append(hints[0])
+    return out
 
 
 BARNUM_LINES_BY_PLANET = {
@@ -1051,7 +1185,7 @@ def generate_barnum_line(p: dict) -> str:
     return lines[idx]
 
 
-def suggest_actions_for_placement(p: dict, limit: int = 2) -> list[str]:
+def suggest_actions_for_placement(p: dict, used_hints: set[str] | None = None, limit: int = 2) -> list[str]:
     actions = []
     actions.extend(ACTIONS_BY_PLANET.get(p.get("planet"), []))
     house = p.get("house")
@@ -1065,12 +1199,18 @@ def suggest_actions_for_placement(p: dict, limit: int = 2) -> list[str]:
     for a in actions:
         if a not in deduped:
             deduped.append(a)
-    return deduped[:limit]
+    if used_hints is None:
+        return deduped[:limit]
+    return choose_non_repeating_action_hint(deduped, used_hints, limit=limit)
 
 
-def suggest_actions_for_aspect(asp: dict, limit: int = 1) -> list[str]:
+def suggest_actions_for_aspect(asp: dict, used_hints: set[str] | None = None, limit: int = 1) -> list[str]:
     action = ACTIONS_BY_ASPECT_TYPE.get(asp.get("aspect"))
-    return [action][:limit] if action else []
+    if not action:
+        return []
+    if used_hints is None:
+        return [action][:limit]
+    return choose_non_repeating_action_hint([action], used_hints, limit=limit)
 
 
 def suggest_actions_for_balance(chart: list[dict], limit: int = 2) -> list[str]:
@@ -1089,28 +1229,24 @@ def suggest_actions_for_balance(chart: list[dict], limit: int = 2) -> list[str]:
     return ACTIONS_BY_BALANCE.get(key, ["得意パターンを固定しつつ、月1回は新しい方法を試して更新する"])[:limit]
 
 
-def synthesize_planet_sign_house(p: dict, suppress_sign_detail: bool = False) -> str:
+def synthesize_planet_sign_house(
+    p: dict,
+    suppress_sign_detail: bool = False,
+    recent_templates: dict[str, str] | None = None,
+) -> str:
     """Planet × Sign × House を統合文として生成する。"""
     planet = p.get("planet", "")
     sign = p.get("sign", "")
     house = p.get("house", 0)
     ps = synthesize_planet_sign(p, suppress_redundant=suppress_sign_detail)
-    ph = synthesize_planet_house(p)
-    motion = "内面で熟成してから形にする" if p.get("retrograde") else "行動しながら答えを磨く"
-    return f"{planet}が{sign}の第{house}ハウス。{ps}。{ph}。{motion}タイプです。"
-
-
-def dedupe_aspects(aspects: list[dict]) -> list[dict]:
-    """同義に近いアスペクトを天体ペア×アスペクト種別で集約（最小オーブ優先）。"""
-    best: dict[tuple, dict] = {}
-    for asp in aspects:
-        p1, p2 = asp.get("planet1"), asp.get("planet2")
-        pair = tuple(sorted([p1, p2]))
-        key = (pair, asp.get("aspect"))
-        prev = best.get(key)
-        if not prev or asp.get("orb", 999) < prev.get("orb", 999):
-            best[key] = asp
-    return sorted(best.values(), key=lambda x: x.get("orb", 999))
+    ph = synthesize_planet_house(p, recent_templates=recent_templates).rstrip("。")
+    motion_candidates = [
+        "内面で熟成してから形にする流れを取りやすいです" if p.get("retrograde") else "行動を重ねながら答えを磨きやすいです",
+        "慎重に組み立てるほど安定感が増します" if p.get("retrograde") else "まず着手してから調整するほど精度が上がります",
+    ]
+    ending = ENDING_VARIATIONS[house % len(ENDING_VARIATIONS)]
+    motion = motion_candidates[house % len(motion_candidates)]
+    return f"{planet}が{sign}の第{house}ハウス。{ps}。{ph}。{motion}。{ending}"
 
 
 def dedupe_similar_lines(lines: list[str]) -> list[str]:
@@ -1124,7 +1260,7 @@ def dedupe_similar_lines(lines: list[str]) -> list[str]:
     return out
 
 
-def synthesize_aspect(asp: dict) -> str:
+def synthesize_aspect(asp: dict, used_hints: set[str] | None = None) -> str:
     """Planet1 × Aspect × Planet2 の意味合成。"""
     p1 = asp.get("planet1")
     p2 = asp.get("planet2")
@@ -1133,12 +1269,24 @@ def synthesize_aspect(asp: dict) -> str:
     aspect_theme = ASPECT_MEANING.get(aspect, "固有の学習テーマを持つ角度")
     orb = float(asp.get("orb", 99.0))
     sign_hint = f"{asp.get('planet1_sign')}×{asp.get('planet2_sign')}"
-    action = suggest_actions_for_aspect(asp)
+    action = suggest_actions_for_aspect(asp, used_hints=used_hints)
     action_line = f" 活かし方のヒント: {action[0]}。" if action else ""
     return (
         f"{p1} {aspect} {p2}: {pair_theme}。{aspect_theme}。"
         f"オーブ{orb:.2f}°（{sign_hint}）。{action_line}"
     )
+
+
+
+def _aspect_priority_score(asp: dict) -> tuple:
+    majors = {"太陽", "月", "水星", "金星", "火星", "木星", "土星"}
+    p1, p2 = asp.get("planet1"), asp.get("planet2")
+    major_count = int(p1 in majors) + int(p2 in majors)
+    orb = float(asp.get("orb", 99.0))
+    rarity_bonus = 0
+    if p1 in {"トゥルーノード", "ドラゴンヘッド", "ノード軸ヘッド"} or p2 in {"トゥルーノード", "ドラゴンヘッド", "ノード軸ヘッド"}:
+        rarity_bonus -= 1
+    return (-major_count, orb, rarity_bonus)
 
 
 def generate_interpretation(
@@ -1149,6 +1297,8 @@ def generate_interpretation(
 ) -> str:
     """象徴合成レイヤーを用いた解釈テキストを生成する。"""
     chart = normalize_node_objects(natal_chart)
+    recent_templates: dict[str, str] = {}
+    used_hints: set[str] = set()
     lines = [
         f"＊ {person_name}の星読みレポート ＊",
         f"生成日時: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
@@ -1162,42 +1312,42 @@ def generate_interpretation(
     seen_signs: set[str] = set()
 
     if sun:
-        lines.append(f"- {synthesize_planet_sign_house(sun)}")
+        lines.append(f"- {synthesize_planet_sign_house(sun, recent_templates=recent_templates)}")
         lines.append(f"  {generate_barnum_line(sun)}")
-        lines.append(f"  日常でやるなら: {' / '.join(suggest_actions_for_placement(sun))}")
+        lines.append(f"  {choose_non_repeating_template(ACTION_HINT_VARIATIONS, 'action_hint', recent_templates).format(hint=' / '.join(suggest_actions_for_placement(sun, used_hints=used_hints)))}")
         seen_signs.add(sun.get("sign"))
     if moon:
-        lines.append(f"- {synthesize_planet_sign_house(moon, suppress_sign_detail=moon.get('sign') in seen_signs)}")
+        lines.append(f"- {synthesize_planet_sign_house(moon, suppress_sign_detail=moon.get('sign') in seen_signs, recent_templates=recent_templates)}")
         lines.append(f"  {generate_barnum_line(moon)}")
-        lines.append(f"  おすすめ行動: {' / '.join(suggest_actions_for_placement(moon))}")
+        lines.append(f"  {choose_non_repeating_template(ACTION_HINT_VARIATIONS, 'action_hint', recent_templates).format(hint=' / '.join(suggest_actions_for_placement(moon, used_hints=used_hints)))}")
         seen_signs.add(moon.get("sign"))
     if asc:
-        lines.append(f"- 社会への見え方: {synthesize_planet_sign_house(asc, suppress_sign_detail=asc.get('sign') in seen_signs)}")
+        lines.append(f"- 社会への見え方: {synthesize_planet_sign_house(asc, suppress_sign_detail=asc.get('sign') in seen_signs, recent_templates=recent_templates)}")
 
     lines.append(f"- 全体バランス: {summarize_element_mode_balance(chart)}")
-    lines.append(f"  活かし方のヒント: {' / '.join(suggest_actions_for_balance(chart))}")
+    lines.append(f"  {choose_non_repeating_template(ACTION_HINT_VARIATIONS, 'action_hint', recent_templates).format(hint=' / '.join(choose_non_repeating_action_hint(suggest_actions_for_balance(chart), used_hints, limit=2)))}")
 
     lines.append("\n【資質（感情と対人傾向）】")
     for pname in ["月", "金星", "火星"]:
         p = next((obj for obj in chart if obj.get("planet") == pname), None)
         if p:
-            lines.append(f"- {synthesize_planet_sign_house(p, suppress_sign_detail=p.get('sign') in seen_signs)}")
+            lines.append(f"- {synthesize_planet_sign_house(p, suppress_sign_detail=p.get('sign') in seen_signs, recent_templates=recent_templates)}")
             barnum = generate_barnum_line(p)
             if barnum:
                 lines.append(f"  {barnum}")
-            lines.append(f"  活かし方のヒント: {' / '.join(suggest_actions_for_placement(p, limit=1))}")
+            lines.append(f"  {choose_non_repeating_template(ACTION_HINT_VARIATIONS, 'action_hint', recent_templates).format(hint=' / '.join(suggest_actions_for_placement(p, used_hints=used_hints, limit=1)))}")
             seen_signs.add(p.get("sign"))
 
     major_aspects = []
     for aspects, _title in aspects_sets:
         major_aspects.extend([a for a in aspects if a.get("aspect") in ASPECT_MEANING])
-    major_aspects = dedupe_aspects(major_aspects)
+    major_aspects = sorted(dedupe_aspects(major_aspects), key=_aspect_priority_score)
 
     lines.append("\n【才能の流れ（自然に伸びる資質）】")
     talent_lines = []
     for asp in major_aspects:
         if asp.get("aspect") in {"トライン", "セクスタイル", "コンジャンクション"}:
-            talent_lines.append(f"- {synthesize_aspect(asp)}")
+            talent_lines.append(f"- {synthesize_aspect(asp, used_hints=used_hints)}")
         if len(talent_lines) >= 4:
             break
     lines.extend(dedupe_similar_lines(talent_lines) or ["- 才能は『やってみる→調整する』の反復で自然に育ちます。"])
@@ -1206,15 +1356,17 @@ def generate_interpretation(
     challenge_lines = []
     for asp in major_aspects:
         if asp.get("aspect") in {"スクエア", "オポジション", "クインカンクス（150°）"}:
-            challenge_lines.append(f"- {synthesize_aspect(asp)}")
+            challenge_lines.append(f"- {synthesize_aspect(asp, used_hints=used_hints)}")
         if len(challenge_lines) >= 4:
             break
     lines.extend(dedupe_similar_lines(challenge_lines) or ["- 大きな葛藤は少なめ。だからこそ、自分から課題設定すると成長が早まります。"])
 
     lines.append("\n【特別な複合配置】")
     any_composite = False
+    deduped_composites = []
     for composites, _title in composite_sets:
-        for comp in composites:
+        deduped_composites.extend(dedupe_composite_patterns(composites))
+    for comp in dedupe_composite_patterns(deduped_composites):
             tmpl = _COMPOSITE_INTERP.get(comp.get("type"))
             if tmpl:
                 planets = "・".join(comp.get("planets", []))
