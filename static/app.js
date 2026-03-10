@@ -14,14 +14,28 @@ if (natalForm) {
   natalForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const f = new FormData(natalForm);
-    const payload = {
-      person_name: f.get('person_name'),
-      birth: {
-        date: f.get('date'), time: f.get('time'), timezone: Number(f.get('timezone')),
-        lat: Number(f.get('lat')), lon: Number(f.get('lon')),
-      },
+    const birth = {
+      date: f.get('date'), time: f.get('time'), timezone: Number(f.get('timezone')),
+      lat: Number(f.get('lat')), lon: Number(f.get('lon')),
     };
-    const result = await postJson('/api/chart/natal', payload);
+    const target = {
+      date: f.get('target_date') || f.get('date'), time: f.get('target_time') || '00:00', timezone: Number(f.get('target_timezone') || 9),
+      lat: Number(f.get('target_lat') || f.get('lat')), lon: Number(f.get('target_lon') || f.get('lon')),
+    };
+    const mode = f.get('chart_mode') || 'natal';
+    let endpoint = '/api/chart/natal';
+    let payload = { person_name: f.get('person_name'), birth };
+    if (mode === 'progressed') {
+      endpoint = '/api/chart/progressed';
+      payload = { person_name: f.get('person_name'), natal: birth, progressed: target };
+    } else if (mode === 'transit') {
+      endpoint = '/api/chart/transit';
+      payload = { person_name: f.get('person_name'), natal: birth, transit: target };
+    } else if (mode === 'triple') {
+      endpoint = '/api/chart/triple';
+      payload = { person_name: f.get('person_name'), natal: birth, progressed: target, transit: target };
+    }
+    const result = await postJson(endpoint, payload);
     document.getElementById('result').textContent = JSON.stringify(result, null, 2);
   });
 }

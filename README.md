@@ -143,7 +143,20 @@ curl -sS -X POST http://127.0.0.1:8000/api/chart/natal \
 
 - ヘルスチェック: `GET /health`
 - 入力画面: `GET /form/natal`, `GET /form/synastry`
-- API: `POST /api/chart/natal`, `POST /api/chart/synastry`, `POST /api/chart/transit`
+- API: `POST /api/chart/natal`, `POST /api/chart/progressed`, `POST /api/chart/transit`, `POST /api/chart/triple`, `POST /api/chart/synastry`
 - 結果参照: `GET /result/{result_id}`, `GET /result/{result_id}/view`
 
 「まず動くか確認する」目的では、**`/health` → `/form/natal` → `/api/chart/natal`** の順で確認するのが最短です。
+
+
+## 9. チャート種別（chart mode）
+
+- `natal`: 出生図（1人分）
+- `progressed`: 二次進行（出生 + 基準日時）
+- `transit`: トランジット（出生 + 現在日時）
+- `triple`: ネイタル + プログレス + トランジット統合
+- `synastry`: 相性（2人分）
+
+フォームでは `/form/natal` で `natal/progressed/transit/triple` を選択し、`/form/synastry` は2人入力専用です。
+
+`/api/report/render` には `chart_mode` を渡せます。
