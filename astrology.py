@@ -129,11 +129,11 @@ def get_house(lon, cusps):
         cusp_start = cusps[i] % 360.0
         cusp_end = cusps[i + 1] % 360.0 if i < 12 else cusps[1] % 360.0
         if cusp_start <= cusp_end:
-            if cusp_start - epsilon <= lon < cusp_end + epsilon:
+            if cusp_start - epsilon <= lon < cusp_end:
                 return i
         else:
             # 360度をまたぐ場合
-            if lon >= cusp_start - epsilon or lon < cusp_end + epsilon:
+            if lon >= cusp_start - epsilon or lon < cusp_end:
                 return i
     return 12
 
@@ -302,6 +302,8 @@ def calculate_aspects(
     """
     aspects = []
     same_chart_comparison = deduplicate_when_same_chart and astro_data1 is astro_data2
+    # 注意: is はオブジェクト同一性で判定するため、list() 等でコピーして渡すと
+    #       同一チャートでも False になり重複が生じる。呼び出し側で同じ変数を渡すこと。
 
     if same_chart_comparison:
         pair_iter = combinations(astro_data1, 2)
@@ -309,18 +311,35 @@ def calculate_aspects(
         pair_iter = ((planet1, planet2) for planet1 in astro_data1 for planet2 in astro_data2)
 
     for planet1, planet2 in pair_iter:
-            # 特別なポイント同士のアスペクトは除外
-            special_points = [
-                'アセンダント', 'ディセンダント',
-                'MC（ミッドヘヴン）', 'IC（天底）',
-                'バーテクス', 'パート・オブ・フォーチュン'
-            ]
-            if planet1['planet'] in special_points and planet2['planet'] in special_points:
-                continue
-            diff = abs(planet1['longitude'] - planet2['longitude'])
-            diff = min(diff, 360 - diff)
-            # メジャーアスペクト
-            for aspect, (aspect_degree, orb) in MAJOR_ASPECTS.items():
+        # 特別なポイント同士のアスペクトは除外
+        special_points = [
+            'アセンダント', 'ディセンダント',
+            'MC（ミッドヘヴン）', 'IC（天底）',
+            'バーテクス', 'パート・オブ・フォーチュン'
+        ]
+        if planet1['planet'] in special_points and planet2['planet'] in special_points:
+            continue
+        diff = abs(planet1['longitude'] - planet2['longitude'])
+        diff = min(diff, 360 - diff)
+        # メジャーアスペクト
+        for aspect, (aspect_degree, orb) in MAJOR_ASPECTS.items():
+            if abs(diff - aspect_degree) <= orb:
+                aspects.append({
+                    'planet1': planet1['planet'],
+                    'planet2': planet2['planet'],
+                    'aspect': aspect,
+                    'planet1_sign': planet1['sign'],
+                    'planet1_house': planet1['house'],
+                    'planet2_sign': planet2['sign'],
+                    'planet2_house': planet2['house'],
+                    'exact': diff,
+                    'orb': abs(diff - aspect_degree),
+                    'planet1_retrograde': planet1['retrograde'],
+                    'planet2_retrograde': planet2['retrograde']
+                })
+        # マイナーアスペクト
+        if include_minor_aspects:
+            for aspect, (aspect_degree, orb) in MINOR_ASPECTS.items():
                 if abs(diff - aspect_degree) <= orb:
                     aspects.append({
                         'planet1': planet1['planet'],
@@ -335,23 +354,6 @@ def calculate_aspects(
                         'planet1_retrograde': planet1['retrograde'],
                         'planet2_retrograde': planet2['retrograde']
                     })
-            # マイナーアスペクト
-            if include_minor_aspects:
-                for aspect, (aspect_degree, orb) in MINOR_ASPECTS.items():
-                    if abs(diff - aspect_degree) <= orb:
-                        aspects.append({
-                            'planet1': planet1['planet'],
-                            'planet2': planet2['planet'],
-                            'aspect': aspect,
-                            'planet1_sign': planet1['sign'],
-                            'planet1_house': planet1['house'],
-                            'planet2_sign': planet2['sign'],
-                            'planet2_house': planet2['house'],
-                            'exact': diff,
-                            'orb': abs(diff - aspect_degree),
-                            'planet1_retrograde': planet1['retrograde'],
-                            'planet2_retrograde': planet2['retrograde']
-                        })
     return aspects
 
 def calculate_composite_aspects(astro_data, composite_aspects_def):
