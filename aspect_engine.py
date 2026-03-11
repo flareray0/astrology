@@ -12,6 +12,14 @@ ASPECT_TYPE_MAP = {
     "オポジション": {"angle": 180, "type": "opposition"},
 }
 
+ASPECT_TYPE_MEANING = {
+    "conjunction": "融合と増幅が同時に起こり、テーマが強く前面化する角度",
+    "sextile": "機会を活かすほど協力作用が伸びる角度",
+    "square": "摩擦が課題を可視化し、成長圧を生む角度",
+    "trine": "自然な流れで才能が巡回しやすい角度",
+    "opposition": "両極の視点を往復し、他者を鏡に統合を学ぶ角度",
+}
+
 ELEMENT_MAP = {
     "牡羊座": "火", "獅子座": "火", "射手座": "火",
     "牡牛座": "地", "乙女座": "地", "山羊座": "地",
@@ -20,18 +28,24 @@ ELEMENT_MAP = {
 }
 
 HOUSE_INTERACTION = {
-    (3, 10): "学び・発信が仕事や評価に直結しやすい流れ",
-    (4, 7): "家庭の価値観がパートナーシップ運用に影響する流れ",
-    (2, 8): "個人資産と共有資産のバランス調整が課題になりやすい流れ",
-    (1, 7): "自己主張と対人協調の境界線がテーマになる流れ",
+    (3, 10): "学びや発信が職業評価に直結し、報連相の質が成果差を生みやすい",
+    (4, 7): "家庭観と対人契約の整合性が問われ、関係ルール更新が起こりやすい",
+    (2, 8): "個人資産と共有資産の設計が連動し、金銭ポリシーの調整が必要になりやすい",
+    (1, 7): "自己主張と協調の境界管理が課題化し、対話設計で結果が変わりやすい",
 }
 
-PLANET_MAX_ORB = {
-    "太陽": 8.0,
-    "月": 8.0,
-}
-
+PLANET_MAX_ORB = {"太陽": 8.0, "月": 8.0}
 OUTER_PLANETS = {"天王星", "海王星", "冥王星"}
+
+MODE_FOCUS = {
+    "natal": "長期的な性格パターンとして反復されやすい",
+    "progressed": "内面の成熟テーマとして体感されやすい",
+    "transit": "現実イベントとして短中期で顕在化しやすい",
+    "triple": "本質・内面・外部環境の接点として統合課題が見えやすい",
+    "synastry": "関係性ダイナミクスとして相互反応に表れやすい",
+}
+
+OPENERS = ["この配置は", "この角度では", "この組み合わせは", "この天体関係は"]
 
 
 def _max_orb(planet1: str, planet2: str) -> float:
@@ -45,8 +59,13 @@ def _max_orb(planet1: str, planet2: str) -> float:
 
 @lru_cache(maxsize=1)
 def load_aspect_rules() -> dict:
-    rule_path = Path(__file__).resolve().parent / "aspect_rules.json"
-    with rule_path.open("r", encoding="utf-8") as f:
+    with (Path(__file__).resolve().parent / "aspect_rules.json").open("r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+@lru_cache(maxsize=1)
+def load_planet_pairs() -> dict:
+    with (Path(__file__).resolve().parent / "aspect_planet_pairs.json").open("r", encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -79,42 +98,78 @@ def strength_narrative(orb: float) -> str:
 
 
 def sign_interaction(sign1: str, sign2: str) -> str:
-    e1 = ELEMENT_MAP.get(sign1)
-    e2 = ELEMENT_MAP.get(sign2)
-    pair = frozenset([e1, e2])
+    pair = frozenset([ELEMENT_MAP.get(sign1), ELEMENT_MAP.get(sign2)])
     if pair == frozenset(["火", "風"]):
-        return "行動と発想が連動し、展開が速くなりやすい組み合わせ"
+        return "行動力と発想力が接続しやすく、着手から改善までの回転が速くなる"
     if pair == frozenset(["水", "地"]):
-        return "感情と現実感覚が噛み合い、安定運用しやすい組み合わせ"
+        return "感情の安定と実務感覚が連動し、生活設計を固めやすい"
     if pair == frozenset(["火", "水"]):
-        return "情熱と感情の温度差が出やすく、反応速度の調整が鍵になる組み合わせ"
+        return "情熱と繊細さの速度差が出やすく、意思表示タイミングの調整が要点になる"
     if pair == frozenset(["地", "風"]):
-        return "論理と実務を接続しやすく、計画が実装に落ちやすい組み合わせ"
-    return "価値観の違いが学習機会になり、関わり方を更新しやすい組み合わせ"
+        return "構想を現実タスクへ落とし込みやすく、設計と実行の往復が効く"
+    return "価値観の違いが学習資源になり、役割分担を更新しやすい"
 
 
 def house_interaction(house1: int, house2: int) -> str:
     key = tuple(sorted((int(house1), int(house2))))
-    return HOUSE_INTERACTION.get(key, "日常領域どうしの接点で、現実課題として可視化されやすい流れ")
+    return HOUSE_INTERACTION.get(key, "日常導線の接点で課題が顕在化し、運用ルールを再設計しやすい")
+
+
+def _pair_key(planet1: str, planet2: str) -> str:
+    ordered = sorted([planet1, planet2])
+    return f"{ordered[0]}|{ordered[1]}"
 
 
 def _rule_key(planet1: str, planet2: str, aspect_type: str) -> str:
-    ordered = sorted([planet1, planet2])
-    return f"{ordered[0]}|{ordered[1]}|{aspect_type}"
+    return f"{_pair_key(planet1, planet2)}|{aspect_type}"
 
 
-def interpret_aspect(aspect_data: dict) -> dict:
+def _aspect_identity(p1: str, p2: str, aspect_name: str, orb: float) -> str:
+    return f"{p1}と{p2}の{aspect_name}（オーブ{orb:.2f}°）"
+
+
+def _choose_opener(p1: str, p2: str, aspect_type: str) -> str:
+    seed = sum(ord(ch) for ch in f"{p1}{p2}{aspect_type}")
+    return OPENERS[seed % len(OPENERS)]
+
+
+def interpret_aspect(aspect_data: dict, mode: str = "natal") -> dict:
     classified = classify_aspect(aspect_data)
     p1, p2 = classified["planets"]
+    aspect_name = aspect_data.get("aspect", "")
+    aspect_type = classified["type"]
+
     rules = load_aspect_rules()
-    rule = rules.get(_rule_key(p1, p2, classified["type"]), rules.get("default", {}))
+    pairs = load_planet_pairs()
+    rule = rules.get(_rule_key(p1, p2, aspect_type), {})
+    pair_info = pairs.get(_pair_key(p1, p2), pairs.get("default", {}))
+
+    life_patterns = pair_info.get("life_patterns", ["行動結果のばらつき"])
+    mode_focus = MODE_FOCUS.get(mode, MODE_FOCUS["natal"])
+    opener = _choose_opener(p1, p2, aspect_type)
+
+    psychological_dynamic = rule.get(
+        "psychology",
+        f"{pair_info.get('core_tension', '価値観の調整')}。{ASPECT_TYPE_MEANING.get(aspect_type, '関係性を更新する角度')}。",
+    )
+    life_manifestation = rule.get(
+        "life_manifestation",
+        f"{life_patterns[0]}を起点に、{life_patterns[1]}へ連鎖しやすい。",
+    )
+    practical_guidance = rule.get(
+        "advice",
+        f"{pair_info.get('growth_theme', '運用ルールを明確化する')}。",
+    )
 
     return {
         "classification": classified,
-        "psychology": rule.get("psychology", f"{p1}と{p2}の組み合わせが、内面テーマを強調しやすい配置"),
-        "life_manifestation": rule.get("life_manifestation", "対人・仕事・習慣の選択に連鎖的な影響が出やすい時期"),
-        "advice": rule.get("advice", "反応が良い行動を小さく継続し、検証ログを残す"),
-        "strength_narrative": strength_narrative(classified["orb"]),
+        "identity": _aspect_identity(p1, p2, aspect_name, classified["orb"]),
+        "opener": opener,
+        "psychological_dynamic": psychological_dynamic,
+        "life_manifestation": life_manifestation,
+        "timing_or_intensity": f"{strength_narrative(classified['orb'])}。{mode_focus}。",
+        "practical_guidance": practical_guidance,
         "sign_interaction": sign_interaction(classified["signs"][0], classified["signs"][1]),
         "house_interaction": house_interaction(classified["houses"][0], classified["houses"][1]),
+        "life_events": life_patterns[:3],
     }
