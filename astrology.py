@@ -1244,17 +1244,129 @@ ACTION_HINT_VARIATIONS = [
 ]
 
 
-def choose_non_repeating_template(candidates: list[str], key: str, recent: dict[str, str]) -> str:
+def choose_non_repeating_template(candidates: list[str], key: str, recent: dict[str, str | int]) -> str:
     if not candidates:
         return ""
     prev = recent.get(key)
+    count_key = f"{key}__count"
+    prev_count = int(recent.get(count_key, 0)) if str(recent.get(count_key, 0)).isdigit() else 0
+    if isinstance(prev, str) and prev in candidates and prev_count < 2:
+        recent[count_key] = prev_count + 1
+        return prev
     for c in candidates:
         if c != prev:
             recent[key] = c
+            recent[count_key] = 1
             return c
     chosen = candidates[0]
     recent[key] = chosen
+    recent[count_key] = 1
     return chosen
+
+
+PSYCHOLOGY_TRANSLATION_DICT = {
+    ("太陽", "山羊座"): {
+        "traits": ["考えを現実化する力", "計画思考", "責任感"],
+        "behaviors": ["情報を構造化してから動く", "目標を逆算して手順化する"],
+    },
+    ("月", "蟹座"): {
+        "traits": ["感情の機微を読む力", "保護本能", "安心基地を作る力"],
+        "behaviors": ["場の空気を先に整える", "身近な人の状態を観察する"],
+    },
+    ("水星", "乙女座"): {
+        "traits": ["分析力", "言語化能力", "改善志向"],
+        "behaviors": ["曖昧な情報を整理して伝える", "小さな誤差を修正する"],
+    },
+}
+
+HOUSE_LIFE_EVENT_MAP = {
+    1: ["自己イメージの更新", "第一印象", "行動スタイル"],
+    2: ["収入と支出", "所有", "自己価値感"],
+    3: ["学習", "対話", "書く・教える"],
+    4: ["家族", "居場所", "生活基盤"],
+    5: ["恋愛", "創作活動", "趣味", "遊び", "自己表現"],
+    6: ["仕事の運用", "健康習慣", "日課の整備"],
+    7: ["パートナーシップ", "契約", "対人調整"],
+    8: ["深い絆", "共有資産", "感情の再生"],
+    9: ["学び直し", "旅", "信念の拡張"],
+    10: ["キャリア", "社会評価", "責任ある役割"],
+    11: ["仲間", "コミュニティ", "将来構想"],
+    12: ["休息", "内省", "手放し"],
+}
+
+
+def translate_life_event(house: int) -> list[str]:
+    return HOUSE_LIFE_EVENT_MAP.get(house, ["日常テーマの再調整"])
+
+
+def translate_psychology(planet: str, sign: str, house: int) -> dict[str, list[str]]:
+    base = PSYCHOLOGY_TRANSLATION_DICT.get((planet, sign), {
+        "traits": [f"{planet}の資質を{sign}的に使う力"],
+        "behaviors": [f"{planet}テーマを{sign}らしく表現する"],
+    })
+    return {
+        "psychological_traits": base["traits"],
+        "behavior_patterns": base["behaviors"],
+        "life_events": translate_life_event(house),
+    }
+
+
+def synthesize_life_narrative(phenomenon: str, emotions: str, action_hint: str) -> str:
+    return f"現象: {phenomenon}。感情: {emotions}。行動ヒント: {action_hint}。"
+
+
+def generate_progressed_theme(progressed_chart: list[dict]) -> list[str]:
+    themes: list[str] = []
+    for p in sorted(progressed_chart, key=lambda x: float(x.get("house", 99)))[:3]:
+        psych = translate_psychology(p.get("planet", ""), p.get("sign", ""), int(p.get("house", 0)))
+        themes.append(
+            synthesize_life_narrative(
+                f"最近は{p.get('planet')}の{p.get('sign')}・第{p.get('house')}ハウス領域（{' / '.join(psych['life_events'][:2])}）が動きやすい",
+                f"以前より『{' / '.join(psych['psychological_traits'][:2])}』を意識しやすい",
+                f"今は{' / '.join(psych['behavior_patterns'][:2])}を小さく試すと流れに乗りやすい",
+            )
+        )
+    return themes
+
+
+def extract_transit_theme(aspect_sets: list[tuple[list[dict], str]]) -> str:
+    all_aspects = [a for aspects, _ in aspect_sets for a in aspects if a.get("aspect") in MAJOR_ASPECTS]
+    themes: list[str] = []
+    for asp in sorted(all_aspects, key=_aspect_priority_score)[:4]:
+        if "木星" in {asp.get("planet1"), asp.get("planet2")}:
+            themes.append("拡大と挑戦、新機会")
+        elif "土星" in {asp.get("planet1"), asp.get("planet2")}:
+            themes.append("責任再編と基盤強化")
+        elif "天王星" in {asp.get("planet1"), asp.get("planet2")}:
+            themes.append("変化と刷新")
+        else:
+            themes.append("優先順位の再設定")
+    return " / ".join(dict.fromkeys(themes)) if themes else "静かな調整期"
+
+
+def generate_triple_synthesis(natal_chart: list[dict], progress_chart: list[dict], aspect_sets: list[tuple[list[dict], str]]) -> tuple[str, str, str]:
+    natal = _natal_core_narrative(natal_chart)
+    progressed = _progress_narrative(natal_chart, progress_chart)
+    transit = extract_transit_theme(aspect_sets)
+    why_now = f"本質（{_top_key(_element_mode_counts(natal_chart)[0])}）と最近の内面変化が重なり、外部では『{transit}』が同時進行するため、今は転換点です"
+    hint = "今は『続けること1つ・減らすこと1つ・試すこと1つ』を毎週記録すると、内面変化と現実成果が接続しやすくなります"
+    return natal, progressed, synthesize_life_narrative(why_now, "納得と不安が同時に出やすい", hint)
+
+
+def assign_aspect_to_relationship_theme(aspects: list[dict]) -> dict[str, list[dict]]:
+    assigned = {k: [] for k in SYNASTRY_SECTION_TITLES}
+    used: set[tuple[frozenset[str], str]] = set()
+    for asp in aspects:
+        key = (frozenset([asp.get("planet1"), asp.get("planet2")]), asp.get("aspect"))
+        if key in used:
+            continue
+        used.add(key)
+        section = assign_aspect_to_section([asp])
+        for k, vals in section.items():
+            if vals and len(assigned[k]) < 2:
+                assigned[k].extend(vals[:1])
+                break
+    return assigned
 
 
 def choose_non_repeating_action_hint(hints: list[str], used_hints: set[str], limit: int = 1) -> list[str]:
@@ -1699,10 +1811,9 @@ SYNASTRY_SECTION_TITLES = {
     "growth": "【6. この関係が育てるテーマ】",
 }
 
-MAJOR_RELATIONSHIP_ASPECTS = {"コンジャンクション", "オポジション", "トライン", "スクエア", "セクスタイル", "クインカンクス（150°）"}
+MAJOR_RELATIONSHIP_ASPECTS = {"コンジャンクション", "オポジション", "トライン", "スクエア", "セクスタイル"}
 DEEMPHASIZED_MINOR_ASPECTS = {
-    "ノヴァイル（40°）", "セスキコードレート（135°）", "セプタイル（51.43°）", "バイセプタイル（102.86°）",
-    "トライセプタイル（154.29°）", "バイクインタイル（144°）", "クァドノヴァイル（160°）", "ビノヴァイル（80°）",
+    "ノヴァイル（40°）", "セプタイル（51.43°）", "トライセプタイル（154.29°）", "バイクインタイル（144°）",
 }
 
 SECTION_TEMPLATE_PATTERNS = {
@@ -2022,7 +2133,7 @@ def generate_synastry_interpretation(
         ),
     )
 
-    section_aspects = assign_aspect_to_section(selected)
+    section_aspects = assign_aspect_to_relationship_theme(selected)
     for section_key in ["attraction_reason", "emotional", "romance", "friction", "stability", "growth"]:
         _append_synastry_section(lines, section_key, section_aspects.get(section_key, []), used_barnum, used_hints, used_patterns)
 
@@ -2041,98 +2152,57 @@ def generate_progressed_interpretation(chart: list, aspects_sets: list, composit
     header = generate_report_header("progressed", person_name=person_name)
     lines = header[:]
 
-    major = [p for p in progressed_chart if p.get("planet") in MAIN_INTERPRET_PLANETS]
-    major_sorted = sorted(major, key=lambda x: x.get("house", 99))
-    major_by_planet = {p.get("planet"): p for p in major}
-
     lines.append("\n【最近の内面テーマ】")
-    if major_sorted:
-        for p in major_sorted[:3]:
-            lines.append(
-                f"- 最近は、{p.get('planet')}のテーマ（{p.get('sign')}・第{p.get('house')}ハウス）が以前より意識に上がりやすく、"
-                f"{HOUSE_ARCHETYPE.get(p.get('house'), '日常の選択')}を現実的に整えたくなる流れです。"
-            )
-    lines.append(f"- {summarize_element_mode_balance(progressed_chart)}")
+    for line in generate_progressed_theme(progressed_chart):
+        lines.append(f"- {line}")
 
-    lines.append("\n【感情の変化】")
-    moon = major_by_planet.get("月")
-    venus = major_by_planet.get("金星")
-    if moon:
-        lines.append(
-            f"- 最近は、気持ちの扱い方が{moon.get('sign')}的に変わり、以前よりも"
-            f"第{moon.get('house')}ハウス領域（{HOUSE_ARCHETYPE.get(moon.get('house'), '生活テーマ')}）で安心感を求めやすい時期です。"
-        )
-    if venus:
-        lines.append(
-            f"- 今は、心地よさや満足の基準が更新されやすく、{venus.get('planet')} {venus.get('sign')}の影響で"
-            "『好きだけど続けられるか』を以前より丁寧に見極めたくなりやすいでしょう。"
-        )
+    lines.append("\n【時期の読み替え（生活現象）】")
+    for p_obj in sorted([x for x in progressed_chart if x.get("planet") in MAIN_INTERPRET_PLANETS], key=lambda x: x.get("house", 99))[:2]:
+        life_events = translate_life_event(int(p_obj.get("house", 0)))
+        lines.append(f"- 最近は{p_obj.get('planet')}のテーマが『{' / '.join(life_events[:3])}』に出やすく、以前より生活設計そのものを更新したくなりやすいでしょう。")
 
-    lines.append("\n【対人・恋愛・創作で起きやすいこと】")
-    clusters = detect_house_cluster(progressed_chart)
-    if clusters:
-        for cluster in clusters[:2]:
-            lines.append(f"- 最近は、{cluster}が示す領域で対人・恋愛・創作のテーマが前景化しやすく、体験を通じて価値観が更新されやすい時期です。")
-    else:
-        lines.append("- 今は、対人・恋愛・創作の優先順位を見直しながら、心が動く場面に時間配分を寄せるほど流れをつかみやすいでしょう。")
-
-    lines.append("\n【今の課題】")
-    aspect_lines: list[str] = []
-    specific_aspects = {
-        (frozenset(["太陽", "土星"]), "コンジャンクション"): "責任感が強まり、自分への要求水準が上がりやすく、息切れする前の休息設計が課題になりやすい時期です",
-        (frozenset(["太陽", "月"]), "スクエア"): "やりたい方向と心の休ませ方が噛み合いにくく、予定と感情のズレ調整が必要になりやすい時期です",
-        (frozenset(["土星", "金星"]), "スクエア"): "楽しみや人間関係に慎重さが増し、期待値の調整と境界線づくりが課題になりやすい時期です",
-    }
-    gathered_aspects = [asp for aspects, _ in aspects_sets for asp in dedupe_aspects(aspects)]
+    lines.append("\n【アスペクトが示す最近の学習テーマ】")
+    gathered_aspects = [asp for aspects, _title in aspects_sets for asp in dedupe_aspects(aspects)]
     top_aspects = sorted(gathered_aspects, key=_aspect_priority_score)[:4]
     for asp in top_aspects:
-        key = (frozenset([asp.get("planet1"), asp.get("planet2")]), asp.get("aspect"))
-        text = specific_aspects.get(key)
-        if text is None:
-            polarity = "追い風" if asp.get("aspect") in {"トライン", "セクスタイル"} else "負荷"
-            text = (
-                f"{asp.get('planet1')}と{asp.get('planet2')}の{asp.get('aspect')}は、最近の意思決定に{polarity}を生み、"
-                "今は感情と行動の優先順位を細かく調整する課題を示します"
-            )
-        aspect_lines.append(f"- {text}（オーブ{float(asp.get('orb', 99.0)):.2f}°）。")
-    lines.extend(aspect_lines or ["- 今は、結果を急ぐよりも『無理なく続く設計』を優先するほど、内面の変化を安定して扱いやすくなります。"])
+        phenomenon = f"{asp.get('planet1')}と{asp.get('planet2')}の{asp.get('aspect')}が稼働"
+        narrative = synthesize_life_narrative(phenomenon, "最近は優先順位の再設計が必要だと感じやすい", "今は一度に変える対象を1つに絞る")
+        lines.append(f"- {narrative}（オーブ{float(asp.get('orb', 99.0)):.2f}°）。")
+    if not top_aspects:
+        lines.append("- 最近は大きな外圧より、内側の納得感を整えることが進展の鍵です。")
 
     lines.append("\n【この時期の活かし方】")
-    lines.append("- 以前よりも感情の波を拾いやすい時期なので、最近1週間の気分ログを3行で記録し、判断を翌朝に持ち越すだけでも精度が上がります。")
-    lines.append("- 今は、重要テーマを1つに絞って小さく試すほど、内面変化と現実行動がつながりやすくなります。")
-    lines.append("- 最近は、対人・恋愛・創作で『気が重い/気が進む』の差が羅針盤になりやすく、体感ベースの選択が中期的な納得感を育てます。")
-
+    lines.append("- 最近は『以前より合わない進め方』を1つやめるだけでも、内面変化に現実が追いつきやすくなります。")
+    lines.append("- 今は、タスク管理より先に感情ログを整えるほど、判断の質が安定します。")
     lines.append("\n" + "=" * 60)
     lines.append("※このプログレスレポートは二次進行チャートの時期性に基づく自動生成テキストです。")
     return "\n".join(dedupe_similar_lines(lines))
 
-
 def generate_transit_interpretation(chart: list, aspects_sets: list, composite_sets: list, person_name: str = "あなた") -> str:
     header = generate_report_header("transit", person_name=person_name)
+    theme = extract_transit_theme(aspects_sets)
     base = _build_natal_style_interpretation(chart, aspects_sets, composite_sets, person_name, header)
-    return base + "\n\n【トランジット視点の補足】\n- 今は外的刺激が増えやすく、数週間〜数か月で環境変化の波が出やすい時期です。\n- 今の流れに乗るには、短期の試行回数を増やして反応の良い行動を残すのが有効です。"
+    return base + f"\n\n【トランジット視点の補足】\n- 今の外部テーマ: {theme}。\n- 現象を急いで評価するより、反応の良い行動を3週間単位で残すほど運気を使いやすくなります。"
 
 
 def generate_triple_interpretation(natal_chart: list, progress_chart: list, transit_chart: list, aspect_sets: list, person_name: str = "あなた") -> str:
     header = generate_report_header("triple", person_name=person_name)
-    transit_theme = _extract_transit_theme(aspect_sets)
-    integration, actions = _triple_integration_narrative(natal_chart, progress_chart, aspect_sets)
+    natal_theme, progressed_theme, integrated = generate_triple_synthesis(natal_chart, progress_chart, aspect_sets)
     lines = header + [
-        "\n1. あなたの本来の性質",
-        f"- {_natal_core_narrative(natal_chart)}",
-        "\n2. 最近の内面変化",
-        f"- {_progress_narrative(natal_chart, progress_chart)}",
-        "\n3. 今の外部の流れ",
-        f"- {transit_theme}。",
-        "\n4. 今この時期が意味するもの",
-        f"- {integration}",
-        "\n5. 今の時期の活かし方",
-        f"- {actions}",
+        "\n1. 本来の性質（ネイタル）",
+        f"- {natal_theme}",
+        "\n2. 最近の内面変化（プログレス）",
+        f"- {progressed_theme}",
+        "\n3. 今の外部の流れ（トランジット）",
+        f"- {extract_transit_theme(aspect_sets)}。",
+        "\n4. なぜ今この時期なのか（統合）",
+        f"- {integrated}",
+        "\n5. 今どう動くと良いか",
+        "- 今は短期成果より、行動の再現性を優先して『毎週同じ振り返りフォーマット』を運用すると流れが安定します。",
         "\n" + "=" * 60,
         "※このトリプルレポートは3種類のチャート統合に基づく自動生成テキストです。",
     ]
     return "\n".join(lines)
-
 
 def generate_natal_interpretation(natal_chart: list, aspects_sets: list, composite_sets: list, person_name: str = "あなた") -> str:
     return _build_natal_style_interpretation(
