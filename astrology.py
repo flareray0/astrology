@@ -156,7 +156,7 @@ def is_valid_ephemeris_dir(path: Path) -> bool:
         return True
 
     se1_files = [name for name in normalized_names if name.startswith("se") and name.endswith(".se1")]
-    return len(se1_files) >= 2
+    return len(se1_files) >= 1
 
 
 def _discover_dynamic_ephemeris_candidates(base_dir: Path) -> list[Path]:
