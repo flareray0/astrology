@@ -1366,6 +1366,128 @@ def suggest_actions_for_balance(chart: list[dict], limit: int = 2) -> list[str]:
     return ACTIONS_BY_BALANCE.get(key, ["得意パターンを固定しつつ、月1回は新しい方法を試して更新する"])[:limit]
 
 
+def _element_mode_counts(chart: list[dict]) -> tuple[dict[str, int], dict[str, int]]:
+    major = [p for p in normalize_node_objects(chart) if p.get("planet") in MAIN_INTERPRET_PLANETS]
+    element_count = {"火": 0, "地": 0, "風": 0, "水": 0}
+    mode_count = {"活動": 0, "固定": 0, "柔軟": 0}
+    for p in major:
+        sign_meta = _SIGN_META.get(p.get("sign"), {})
+        element = sign_meta.get("element")
+        mode = sign_meta.get("mode")
+        if element in element_count:
+            element_count[element] += 1
+        if mode in mode_count:
+            mode_count[mode] += 1
+    return element_count, mode_count
+
+
+def _top_key(counts: dict[str, int]) -> str:
+    return max(counts, key=counts.get)
+
+
+def _natal_core_narrative(natal_chart: list[dict]) -> str:
+    element_count, mode_count = _element_mode_counts(natal_chart)
+    top_element = _top_key(element_count)
+    top_mode = _top_key(mode_count)
+
+    element_map = {
+        "火": "人格は『まず動いて世界を切り開く』ことで輪郭がはっきりします。熱量が高いぶん、短距離での立ち上がりが速いタイプです",
+        "地": "人格は『現実に落とし込んで積み上げる』ことで安定します。結果を作るための手順設計が得意なタイプです",
+        "風": "人格は『情報をつないで意味を見出す』ことで活性化します。思考の回転が速く、選択肢を増やして最適化するタイプです",
+        "水": "人格は『感情の質を整える』ことで本来の力が出ます。空気や関係性の機微を読み、深い共感で動くタイプです",
+    }
+    mode_map = {
+        "活動": "行動傾向は、完璧を待つより先に着手して流れを作るほうが噛み合います",
+        "固定": "行動傾向は、いったん決めた方針を深く育てるほど成果が太くなります",
+        "柔軟": "行動傾向は、状況を見ながら方法を微調整すると実力が伸びます",
+    }
+    think_map = {
+        "火": "思考スタイルは『直感先行→検証で磨く』型になりやすいです",
+        "地": "思考スタイルは『事実確認→実行可能性を評価』型になりやすいです",
+        "風": "思考スタイルは『比較検討→言語化で整理』型になりやすいです",
+        "水": "思考スタイルは『感覚把握→納得感で決断』型になりやすいです",
+    }
+
+    return f"{element_map[top_element]}。{think_map[top_element]}。{mode_map[top_mode]}。"
+
+
+def _progress_narrative(natal_chart: list[dict], progress_chart: list[dict]) -> str:
+    natal_elements, natal_modes = _element_mode_counts(natal_chart)
+    progress_elements, progress_modes = _element_mode_counts(progress_chart)
+    natal_top_element = _top_key(natal_elements)
+    progress_top_element = _top_key(progress_elements)
+    natal_top_mode = _top_key(natal_modes)
+    progress_top_mode = _top_key(progress_modes)
+
+    shift_lines = []
+    if natal_top_element != progress_top_element:
+        shift_lines.append(
+            f"ここ数年は、これまでの『{natal_top_element}的な進め方』から『{progress_top_element}的な進め方』へ重心が移り、"
+            "同じ目標でも取り組み方を変えたくなる感覚が強まりやすい時期です"
+        )
+    else:
+        shift_lines.append(
+            f"ここ数年は『{progress_top_element}』の資質を深掘りする流れが続き、"
+            "以前よりも「自分らしい基準で選ぶ」感覚が明確になりやすい時期です"
+        )
+
+    if natal_top_mode != progress_top_mode:
+        shift_lines.append(
+            f"行動リズムも『{natal_top_mode}』から『{progress_top_mode}』へ変化し、"
+            "昔は平気だった進め方に違和感が出るのは自然な反応です"
+        )
+
+    shift_lines.append("最近『このままではしっくりこない』と感じているなら、その感覚は内面の成熟サインです")
+    return "。".join(shift_lines) + "。"
+
+
+def _extract_transit_theme(aspect_sets: list[tuple[list[dict], str]]) -> str:
+    all_aspects = [a for aspects, _ in aspect_sets for a in aspects]
+    transit_aspects = [a for a in all_aspects if "トランジット" in str(a.get("category", ""))]
+    if not transit_aspects:
+        transit_aspects = all_aspects
+
+    hard = {"スクエア", "オポジション", "クインカンクス（150°）"}
+    soft = {"トライン", "セクスタイル", "コンジャンクション"}
+    hard_count = sum(1 for a in transit_aspects if a.get("aspect") in hard)
+    soft_count = sum(1 for a in transit_aspects if a.get("aspect") in soft)
+
+    if hard_count > soft_count:
+        return (
+            "今は外部環境からの要請が強まり、優先順位の再設定を迫られやすい時期です。"
+            "負荷はかかりますが、不要な約束や惰性の習慣を手放すほど身軽さを取り戻せます"
+        )
+    if soft_count > hard_count:
+        return (
+            "今は追い風を受け取りやすく、協力・学習・発信が成果につながりやすい時期です。"
+            "小さな挑戦を公開し、反応の良いものへ資源を寄せるほど流れに乗れます"
+        )
+    return (
+        "今は追い風と負荷が同時に来る混合フェーズです。"
+        "守る領域と広げる領域を分けて運用すると、消耗を抑えながら前進しやすくなります"
+    )
+
+
+def _triple_integration_narrative(natal_chart: list[dict], progress_chart: list[dict], aspect_sets: list[tuple[list[dict], str]]) -> tuple[str, str]:
+    natal_top_element = _top_key(_element_mode_counts(natal_chart)[0])
+    progress_top_element = _top_key(_element_mode_counts(progress_chart)[0])
+    transit_theme = _extract_transit_theme(aspect_sets)
+
+    integration = (
+        f"今この時期が意味を持つのは、あなたの本質である『{natal_top_element}』の使い方を、"
+        f"現在の内面テーマ『{progress_top_element}』に合わせて再編集する転換点だからです。"
+        f"{transit_theme}。"
+        "過去の成功法則をそのまま繰り返すより、目的は据え置きで手段を更新したほうが、運と実力の接続が強まります"
+    )
+
+    actions = (
+        "活かし方は3つです。①毎週1回、予定を『続ける・減らす・試す』の3分類で棚卸しする。"
+        "②意思決定は10分で一次判断し、24時間以内に最小実験へ落とす。"
+        "③感情が乱れた日は成果目標を下げ、行動目標（連絡1件・メモ10行など）だけ達成して自己効力感を維持する"
+    )
+    return integration + "。", actions + "。"
+
+
 def synthesize_planet_sign_house(
     p: dict,
     suppress_sign_detail: bool = False,
@@ -1928,16 +2050,19 @@ def generate_transit_interpretation(chart: list, aspects_sets: list, composite_s
 
 def generate_triple_interpretation(natal_chart: list, progress_chart: list, transit_chart: list, aspect_sets: list, person_name: str = "あなた") -> str:
     header = generate_report_header("triple", person_name=person_name)
+    transit_theme = _extract_transit_theme(aspect_sets)
+    integration, actions = _triple_integration_narrative(natal_chart, progress_chart, aspect_sets)
     lines = header + [
-        "\n【生まれ持った核（ネイタル）】",
-        f"- {summarize_element_mode_balance(normalize_node_objects(natal_chart))}",
-        "\n【今の内面的変化（プログレス）】",
-        f"- {summarize_element_mode_balance(normalize_node_objects(progress_chart))}",
-        "\n【今の外的刺激 / 時期性（トランジット）】",
-        f"- ネイタルとの接点アスペクトは{sum(len(a[0]) for a in aspect_sets)}件で、今は反応速度が求められる局面です。",
-        "\n【統合：今どう動くと良いか】",
-        "- 核となる強みは維持しつつ、内面の変化に合う行動へ小さく更新するほど運の巡りが整います。",
-        "- 予定表に『深掘りする時間』と『外界に触れる時間』を同時に確保すると、三層の流れが噛み合います。",
+        "\n1. あなたの本来の性質",
+        f"- {_natal_core_narrative(natal_chart)}",
+        "\n2. 最近の内面変化",
+        f"- {_progress_narrative(natal_chart, progress_chart)}",
+        "\n3. 今の外部の流れ",
+        f"- {transit_theme}。",
+        "\n4. 今この時期が意味するもの",
+        f"- {integration}",
+        "\n5. 今の時期の活かし方",
+        f"- {actions}",
         "\n" + "=" * 60,
         "※このトリプルレポートは3種類のチャート統合に基づく自動生成テキストです。",
     ]
