@@ -145,36 +145,132 @@ LEGACY_MODE_ALIASES = {
 chart_mode = "triple"
 
 
-def _resolve_ephemeris_path() -> str:
-    """環境変数優先 + リポジトリ相対候補から ephemeris パスを解決する。"""
-    env_path = os.getenv("ASTROLOGY_EPHE_PATH")
-    if env_path:
-        return str(Path(env_path).expanduser().resolve())
+EPHEMERIS_ENV_VAR = "ASTROLOGY_EPHE_PATH"
+def is_valid_ephemeris_dir(path: Path) -> bool:
+    """Swiss Ephemeris ファイル群が配置されているディレクトリかを判定する。"""
+    if not path or not path.is_dir():
+        return False
 
+    normalized_names = {p.name.lower() for p in path.iterdir() if p.is_file()}
+    if "sefstars.txt" in normalized_names:
+        return True
+
+    se1_files = [name for name in normalized_names if name.startswith("se") and name.endswith(".se1")]
+    return len(se1_files) >= 2
+
+
+def _discover_dynamic_ephemeris_candidates(base_dir: Path) -> list[Path]:
+    """`ephe` を含む名前のディレクトリを 1 階層だけ探索して候補に追加する。"""
+    if not base_dir.exists() or not base_dir.is_dir():
+        return []
+
+    dynamic_candidates: list[Path] = []
+    for child in base_dir.iterdir():
+        if child.is_dir() and "ephe" in child.name.lower():
+            dynamic_candidates.append(child)
+    return dynamic_candidates
+
+
+def _build_ephemeris_candidates() -> list[Path]:
     module_dir = Path(__file__).resolve().parent
+    repo_root = module_dir
+    cwd = Path.cwd()
+
     candidates = [
-        module_dir / "data" / "ephe",
-        module_dir / "ephe",
-        module_dir.parent / "data" / "ephe",
-        module_dir.parent / "ephe",
+        repo_root / "ephe",
+        repo_root / "ephemeris",
+        repo_root / "data" / "ephe",
+        repo_root / "data" / "ephemeris",
+        repo_root,
+        cwd / "ephe",
+        cwd / "ephemeris",
     ]
+
+    candidates.extend(_discover_dynamic_ephemeris_candidates(repo_root))
+    if cwd != repo_root:
+        candidates.extend(_discover_dynamic_ephemeris_candidates(cwd))
+
+    unique_candidates: list[Path] = []
     for candidate in candidates:
-        if candidate.exists():
-            return str(candidate.resolve())
+        resolved = candidate.expanduser().resolve()
+        if resolved not in unique_candidates:
+            unique_candidates.append(resolved)
+    return unique_candidates
 
-    # 候補がまだ無い clone 直後でも壊れにくいように、第一候補を返して作成可能にする
-    return str(candidates[0].resolve())
+
+def resolve_ephemeris_path(ephe_path: str | None = None) -> tuple[str, str, list[str]]:
+    """環境変数優先 + リポジトリ相対候補から ephemeris パスを解決する。"""
+    searched: list[str] = []
+
+    if ephe_path:
+        candidate = Path(ephe_path).expanduser().resolve()
+        searched.append(str(candidate))
+        if is_valid_ephemeris_dir(candidate):
+            return str(candidate), "explicit argument", searched
+        raise FileNotFoundError(
+            f"[EPHE] 指定された path は Swiss Ephemeris ディレクトリとして無効です: {candidate}"
+        )
+
+    env_path = os.getenv(EPHEMERIS_ENV_VAR)
+    if env_path:
+        env_candidate = Path(env_path).expanduser().resolve()
+        searched.append(str(env_candidate))
+        if is_valid_ephemeris_dir(env_candidate):
+            return str(env_candidate), f"{EPHEMERIS_ENV_VAR}", searched
+
+    for candidate in _build_ephemeris_candidates():
+        searched.append(str(candidate))
+        if is_valid_ephemeris_dir(candidate):
+            return str(candidate), "repo candidate", searched
+
+    searched_lines = "\n - " + "\n - ".join(searched)
+    raise FileNotFoundError(
+        "[EPHE] Swiss Ephemeris ファイルが見つかりません。"
+        f"\n環境変数 {EPHEMERIS_ENV_VAR} で明示指定するか、次の候補に配置してください:{searched_lines}"
+    )
 
 
-def configure_ephemeris_path(ephe_path: str | None = None) -> str:
+def configure_ephemeris(ephe_path: str | None = None) -> str:
     """Swiss Ephemeris の参照先を設定し、実際に使うパスを返す。"""
-    resolved = str(Path(ephe_path).expanduser().resolve()) if ephe_path else _resolve_ephemeris_path()
-    os.environ["ASTROLOGY_EPHE_PATH"] = resolved
+    resolved, resolved_from, _ = resolve_ephemeris_path(ephe_path)
+    os.environ[EPHEMERIS_ENV_VAR] = resolved
     swe.set_ephe_path(resolved)
+    print(f"[EPHE] using: {resolved}")
+    print(f"[EPHE] resolved from: {resolved_from}")
     return resolved
 
 
-EPHEMERIS_PATH = configure_ephemeris_path()
+def configure_ephemeris_path(ephe_path: str | None = None) -> str:
+    """後方互換ラッパー。旧コードの固定パス失敗時は自動探索へフォールバック。"""
+    if ephe_path:
+        try:
+            return configure_ephemeris(ephe_path)
+        except FileNotFoundError:
+            print(f"[EPHE] fallback to auto-discovery because invalid explicit path: {ephe_path}")
+    return configure_ephemeris(None)
+
+
+def debug_ephemeris_path() -> dict:
+    """解決結果と探索候補を返すデバッグ用ヘルパー。"""
+    resolved, resolved_from, searched = resolve_ephemeris_path()
+    return {
+        "resolved_path": resolved,
+        "resolved_from": resolved_from,
+        "searched_candidates": searched,
+        "is_valid": is_valid_ephemeris_dir(Path(resolved)),
+    }
+
+
+def print_ephemeris_status() -> dict:
+    """現在の ephemeris 解決状態を標準出力へ表示する。"""
+    status = debug_ephemeris_path()
+    print(f"[EPHE] using: {status['resolved_path']}")
+    print(f"[EPHE] resolved from: {status['resolved_from']}")
+    print(f"[EPHE] valid directory: {status['is_valid']}")
+    return status
+
+
+EPHEMERIS_PATH = configure_ephemeris()
 
 # 複合アスペクト検出から除外する天体・感受点（標準的占星術慣習に基づく）
 # ASC/DSC/MC/IC は出生時刻誤差の影響が大きいため除外

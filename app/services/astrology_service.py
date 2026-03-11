@@ -15,8 +15,8 @@ import astrology
 
 class AstrologyService:
     def __init__(self) -> None:
-        swe.set_ephe_path(settings.astrology_ephe_path)
-        os.environ["ASTROLOGY_EPHE_PATH"] = settings.astrology_ephe_path
+        configured_path = astrology.configure_ephemeris(settings.astrology_ephe_path or None)
+        os.environ["ASTROLOGY_EPHE_PATH"] = configured_path
 
     @staticmethod
     def _to_chart_seed(birth: BirthInput) -> dict:
