@@ -2037,9 +2037,74 @@ def generate_synastry_interpretation(
     return "\n".join(lines)
 
 def generate_progressed_interpretation(chart: list, aspects_sets: list, composite_sets: list, person_name: str = "あなた") -> str:
+    progressed_chart = normalize_node_objects(chart)
     header = generate_report_header("progressed", person_name=person_name)
-    base = _build_natal_style_interpretation(chart, aspects_sets, composite_sets, person_name, header)
-    return base + "\n\n【プログレス視点の補足】\n- 以前よりも内面の成熟テーマが前景化し、価値観の更新が進みやすい時期です。\n- 今は外側の成果より、内側の納得感を育てる選択が長期的な推進力になります。"
+    lines = header[:]
+
+    major = [p for p in progressed_chart if p.get("planet") in MAIN_INTERPRET_PLANETS]
+    major_sorted = sorted(major, key=lambda x: x.get("house", 99))
+    major_by_planet = {p.get("planet"): p for p in major}
+
+    lines.append("\n【最近の内面テーマ】")
+    if major_sorted:
+        for p in major_sorted[:3]:
+            lines.append(
+                f"- 最近は、{p.get('planet')}のテーマ（{p.get('sign')}・第{p.get('house')}ハウス）が以前より意識に上がりやすく、"
+                f"{HOUSE_ARCHETYPE.get(p.get('house'), '日常の選択')}を現実的に整えたくなる流れです。"
+            )
+    lines.append(f"- {summarize_element_mode_balance(progressed_chart)}")
+
+    lines.append("\n【感情の変化】")
+    moon = major_by_planet.get("月")
+    venus = major_by_planet.get("金星")
+    if moon:
+        lines.append(
+            f"- 最近は、気持ちの扱い方が{moon.get('sign')}的に変わり、以前よりも"
+            f"第{moon.get('house')}ハウス領域（{HOUSE_ARCHETYPE.get(moon.get('house'), '生活テーマ')}）で安心感を求めやすい時期です。"
+        )
+    if venus:
+        lines.append(
+            f"- 今は、心地よさや満足の基準が更新されやすく、{venus.get('planet')} {venus.get('sign')}の影響で"
+            "『好きだけど続けられるか』を以前より丁寧に見極めたくなりやすいでしょう。"
+        )
+
+    lines.append("\n【対人・恋愛・創作で起きやすいこと】")
+    clusters = detect_house_cluster(progressed_chart)
+    if clusters:
+        for cluster in clusters[:2]:
+            lines.append(f"- 最近は、{cluster}が示す領域で対人・恋愛・創作のテーマが前景化しやすく、体験を通じて価値観が更新されやすい時期です。")
+    else:
+        lines.append("- 今は、対人・恋愛・創作の優先順位を見直しながら、心が動く場面に時間配分を寄せるほど流れをつかみやすいでしょう。")
+
+    lines.append("\n【今の課題】")
+    aspect_lines: list[str] = []
+    specific_aspects = {
+        (frozenset(["太陽", "土星"]), "コンジャンクション"): "責任感が強まり、自分への要求水準が上がりやすく、息切れする前の休息設計が課題になりやすい時期です",
+        (frozenset(["太陽", "月"]), "スクエア"): "やりたい方向と心の休ませ方が噛み合いにくく、予定と感情のズレ調整が必要になりやすい時期です",
+        (frozenset(["土星", "金星"]), "スクエア"): "楽しみや人間関係に慎重さが増し、期待値の調整と境界線づくりが課題になりやすい時期です",
+    }
+    gathered_aspects = [asp for aspects, _ in aspects_sets for asp in dedupe_aspects(aspects)]
+    top_aspects = sorted(gathered_aspects, key=_aspect_priority_score)[:4]
+    for asp in top_aspects:
+        key = (frozenset([asp.get("planet1"), asp.get("planet2")]), asp.get("aspect"))
+        text = specific_aspects.get(key)
+        if text is None:
+            polarity = "追い風" if asp.get("aspect") in {"トライン", "セクスタイル"} else "負荷"
+            text = (
+                f"{asp.get('planet1')}と{asp.get('planet2')}の{asp.get('aspect')}は、最近の意思決定に{polarity}を生み、"
+                "今は感情と行動の優先順位を細かく調整する課題を示します"
+            )
+        aspect_lines.append(f"- {text}（オーブ{float(asp.get('orb', 99.0)):.2f}°）。")
+    lines.extend(aspect_lines or ["- 今は、結果を急ぐよりも『無理なく続く設計』を優先するほど、内面の変化を安定して扱いやすくなります。"])
+
+    lines.append("\n【この時期の活かし方】")
+    lines.append("- 以前よりも感情の波を拾いやすい時期なので、最近1週間の気分ログを3行で記録し、判断を翌朝に持ち越すだけでも精度が上がります。")
+    lines.append("- 今は、重要テーマを1つに絞って小さく試すほど、内面変化と現実行動がつながりやすくなります。")
+    lines.append("- 最近は、対人・恋愛・創作で『気が重い/気が進む』の差が羅針盤になりやすく、体感ベースの選択が中期的な納得感を育てます。")
+
+    lines.append("\n" + "=" * 60)
+    lines.append("※このプログレスレポートは二次進行チャートの時期性に基づく自動生成テキストです。")
+    return "\n".join(dedupe_similar_lines(lines))
 
 
 def generate_transit_interpretation(chart: list, aspects_sets: list, composite_sets: list, person_name: str = "あなた") -> str:
