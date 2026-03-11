@@ -1887,7 +1887,7 @@ def assign_aspect_to_section(aspects: list[dict]) -> dict[str, list[dict]]:
     return assigned
 
 
-def choose_non_repeating_action_hint(section_key: str, used_hints: set[str], aspects: list[dict]) -> str | None:
+def choose_non_repeating_synastry_action_hint(section_key: str, used_hints: set[str], aspects: list[dict]) -> str | None:
     theme = THEME_BY_SECTION.get(section_key, "growth")
     pair_specific = []
     for asp in aspects:
@@ -1977,7 +1977,7 @@ def _append_synastry_section(lines: list[str], section_key: str, aspects: list[d
     lines.append("\n" + SYNASTRY_SECTION_TITLES[section_key])
     pattern = choose_non_repeating_relation_template(section_key, used_patterns)
     barnum = _pick_barnum_line(section_key, used_barnum)
-    hint = choose_non_repeating_action_hint(section_key, used_hints, aspects)
+    hint = choose_non_repeating_synastry_action_hint(section_key, used_hints, aspects)
     warning = "- 衝突を避けるより、回復の手順を先に決めるほど関係の消耗が減ります。"
 
     for item in pattern:
