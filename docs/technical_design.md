@@ -69,7 +69,7 @@
 - バリデーションは Pydantic で事前防御。
 
 ### 3.9 ローカル開発方針
-- `.env` で ephemeris path を切替。
+- `astrology.py` の自動探索（同梱 `ephemeris/` 優先）を正本とし、必要時のみ `.env` で上書き。
 - `uvicorn app.main:app --reload` で起動。
 - まずファイル保存運用、DB導入は次段。
 
@@ -128,6 +128,6 @@
 - エラーページ: メッセージ表示
 
 ## 7. 仮定（今回）
-- 仮定1: ephemerisファイルは `./data/ephe` に配置可能。
+- 仮定1: ephemerisファイルはリポジトリ同梱の `./ephemeris` を既定で利用。
 - 仮定2: MVPではユーザー認証なし。
 - 仮定3: 保存はJSONファイルで十分（将来DBへ移行）。

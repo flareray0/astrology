@@ -9,8 +9,7 @@ import astrology
 
 
 def main() -> None:
-    ephe_default = REPO_ROOT / "data" / "ephe"
-    astrology.configure_ephemeris_path(str(ephe_default))
+    astrology.configure_ephemeris()
 
     person1 = astrology.build_chart_from_input((1984, 11, 15), "11:27", 9, 37.38, 140.18, hsys="K")
     person2 = astrology.build_chart_from_input((1967, 5, 13), "00:00", 9, 35.68, 139.65, hsys="K")

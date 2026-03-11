@@ -3,19 +3,15 @@
 `astrology.py` を正本として、Swiss Ephemeris の参照先を **環境変数 + 自動探索** で統一しました。
 Notebook / FastAPI / スクリプトのどこから呼んでも同じ解決ロジックを使います。
 
-## Ephemeris の配置場所（推奨）
+## Ephemeris の配置場所（同梱前提）
 
-以下のいずれかに配置してください（未指定時の探索候補）:
+このリポジトリは Swiss Ephemeris ファイル（`.se1`）を **`ephemeris/` に同梱** して使う前提です。
 
-- `ephe/`
-- `ephemeris/`
-- `data/ephe/`
-- `data/ephemeris/`
-- `cwd/ephe/`
-- `cwd/ephemeris/`
-- さらに `ephe` を含むディレクトリ名を repo 直下 / 実行カレント直下から動的探索
+- `ephemeris/sepl_18.se1`
+- `ephemeris/seas_18.se1`
+- `ephemeris/semo_*.se1` など
 
-> このリポジトリでは `sepl_18.se1` などが repo 直下にある場合も検出されます。
+clone 後に追加配置しなくても、そのまま動作します。
 
 ## 環境変数で明示指定
 
@@ -40,7 +36,7 @@ APP_ENV=dev
 
 1. `ASTROLOGY_EPHE_PATH` を確認
 2. repo / cwd の候補ディレクトリを順次探索
-3. Swiss Ephemeris らしいファイル（`se*.se1` 複数、または `sefstars.txt`）を検証
+3. Swiss Ephemeris らしいファイル（`se*.se1` 1つ以上、または `sefstars.txt`）を検証
 4. 見つかったパスを `swe.set_ephe_path(...)` に設定
 5. 解決元と採用パスをログ表示
 
@@ -57,7 +53,7 @@ import astrology
 astrology.print_ephemeris_status()
 ```
 
-`ASTROLOGY_EPHE_PATH` を固定で書かなくても、repo 内の候補から自動検出します。
+`ASTROLOGY_EPHE_PATH` を固定で書かなくても、同梱済み `ephemeris/` を自動検出します。
 
 ## Windows / Linux での使い方
 
