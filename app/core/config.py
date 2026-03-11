@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     env: str = "local"
     debug: bool = True
 
-    astrology_ephe_path: str = "./data/ephe"
+    astrology_ephe_path: str = ""
     astrology_house_system: str = "K"
     include_asteroids: bool = True
     include_minor_aspects: bool = True
