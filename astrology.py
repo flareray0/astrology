@@ -4,6 +4,8 @@ from datetime import datetime
 from itertools import combinations
 from pathlib import Path
 
+from aspect_engine import interpret_aspect
+
 # =======================
 # 0. 入力設定ブロック（差分追加）
 # USE_CONFIG_BLOCK = True  → ここで日時・座標を一括設定
@@ -1636,15 +1638,20 @@ def synthesize_aspect(asp: dict, used_hints: set[str] | None = None) -> str:
     p1 = asp.get("planet1")
     p2 = asp.get("planet2")
     aspect = asp.get("aspect")
-    pair_theme = PLANET_PAIR_MEANING.get(frozenset([p1, p2]), f"{p1}と{p2}の関係")
-    aspect_theme = ASPECT_MEANING.get(aspect, "固有の学習テーマを持つ角度")
     orb = float(asp.get("orb", 99.0))
-    sign_hint = f"{asp.get('planet1_sign')}×{asp.get('planet2_sign')}"
+    enriched = interpret_aspect(asp)
+    pair_theme = PLANET_PAIR_MEANING.get(frozenset([p1, p2]), f"{p1}と{p2}の関係")
     action = suggest_actions_for_aspect(asp, used_hints=used_hints)
-    action_line = f" 活かし方のヒント: {action[0]}。" if action else ""
+    advice = action[0] if action else enriched["advice"]
+
     return (
-        f"{p1} {aspect} {p2}: {pair_theme}。{aspect_theme}。"
-        f"オーブ{orb:.2f}°（{sign_hint}）。{action_line}"
+        f"{p1}と{p2}の{aspect}: {pair_theme}。"
+        f"{enriched['strength_narrative']}（オーブ{orb:.2f}°）。"
+        f"心理テーマ: {enriched['psychology']}。"
+        f"現実化しやすい領域: {enriched['life_manifestation']}。"
+        f"サイン相性: {enriched['sign_interaction']}。"
+        f"ハウス連動: {enriched['house_interaction']}。"
+        f"活かし方: {advice}。"
     )
 
 
@@ -2178,29 +2185,44 @@ def generate_progressed_interpretation(chart: list, aspects_sets: list, composit
     lines.append("※このプログレスレポートは二次進行チャートの時期性に基づく自動生成テキストです。")
     return "\n".join(dedupe_similar_lines(lines))
 
+def build_transit_timing_window(asp: dict, window: float = 2.0) -> str:
+    orb = float(asp.get("orb", 99.0))
+    if orb > window:
+        return f"現在オーブ{orb:.2f}°で、作用の立ち上がり前後に位置しています（実務上の有効窓 ±{window:.0f}°）。"
+    return f"現在オーブ{orb:.2f}°で、実務上の有効窓（±{window:.0f}°）に入っており、出来事として体感しやすい時期です。"
+
+
 def generate_transit_interpretation(chart: list, aspects_sets: list, composite_sets: list, person_name: str = "あなた") -> str:
     header = generate_report_header("transit", person_name=person_name)
     theme = extract_transit_theme(aspects_sets)
     base = _build_natal_style_interpretation(chart, aspects_sets, composite_sets, person_name, header)
-    return base + f"\n\n【トランジット視点の補足】\n- 今の外部テーマ: {theme}。\n- 現象を急いで評価するより、反応の良い行動を3週間単位で残すほど運気を使いやすくなります。"
+    all_aspects = [asp for aspects, _ in aspects_sets for asp in dedupe_aspects(aspects)]
+    top_aspect = sorted(all_aspects, key=lambda x: float(x.get("orb", 99.0)))[0] if all_aspects else None
+    timing_line = f"- タイミング窓: {build_transit_timing_window(top_aspect)}" if top_aspect else "- タイミング窓: 主要ヒットは穏やかで、準備フェーズとして使いやすい時期です。"
+    hit_line = (
+        f"- ナタルヒット: {top_aspect.get('planet1')}にトランジット{top_aspect.get('planet2')}が{top_aspect.get('aspect')}。"
+        if top_aspect
+        else "- ナタルヒット: 目立つ単発ヒットより、複数要因の重なりで現象化しやすい局面です。"
+    )
+    return base + f"\n\n【トランジット視点の補足】\n- 今の外部テーマ: {theme}。\n{hit_line}\n{timing_line}\n- 現象を急いで評価するより、反応の良い行動を3週間単位で残すほど運気を使いやすくなります。"
 
 
 def generate_triple_interpretation(natal_chart: list, progress_chart: list, transit_chart: list, aspect_sets: list, person_name: str = "あなた") -> str:
     header = generate_report_header("triple", person_name=person_name)
     natal_theme, progressed_theme, integrated = generate_triple_synthesis(natal_chart, progress_chart, aspect_sets)
     lines = header + [
-        "\n1. 本来の性質（ネイタル）",
+        "\n1. 本質（ネイタル）",
         f"- {natal_theme}",
-        "\n2. 最近の内面変化（プログレス）",
+        "\n2. 現在の内面（プログレス）",
         f"- {progressed_theme}",
-        "\n3. 今の外部の流れ（トランジット）",
+        "\n3. 外部環境（トランジット）",
         f"- {extract_transit_theme(aspect_sets)}。",
-        "\n4. なぜ今この時期なのか（統合）",
+        "\n4. 統合ポイント",
         f"- {integrated}",
-        "\n5. 今どう動くと良いか",
+        "\n5. 実践アクション",
         "- 今は短期成果より、行動の再現性を優先して『毎週同じ振り返りフォーマット』を運用すると流れが安定します。",
         "\n" + "=" * 60,
-        "※このトリプルレポートは3種類のチャート統合に基づく自動生成テキストです。",
+        "※このトリプルレポートはネイタル・プログレス・トランジット統合に基づく自動生成テキストです。",
     ]
     return "\n".join(lines)
 
