@@ -4,6 +4,8 @@ from datetime import datetime
 from itertools import combinations
 from pathlib import Path
 
+from aspect_engine import interpret_aspect
+
 # =======================
 # 0. 入力設定ブロック（差分追加）
 # USE_CONFIG_BLOCK = True  → ここで日時・座標を一括設定
@@ -1631,20 +1633,22 @@ def dedupe_similar_lines(lines: list[str]) -> list[str]:
     return out
 
 
-def synthesize_aspect(asp: dict, used_hints: set[str] | None = None) -> str:
+def synthesize_aspect(asp: dict, used_hints: set[str] | None = None, mode: str = "natal") -> str:
     """Planet1 × Aspect × Planet2 の意味合成。"""
-    p1 = asp.get("planet1")
-    p2 = asp.get("planet2")
-    aspect = asp.get("aspect")
-    pair_theme = PLANET_PAIR_MEANING.get(frozenset([p1, p2]), f"{p1}と{p2}の関係")
-    aspect_theme = ASPECT_MEANING.get(aspect, "固有の学習テーマを持つ角度")
-    orb = float(asp.get("orb", 99.0))
-    sign_hint = f"{asp.get('planet1_sign')}×{asp.get('planet2_sign')}"
+    enriched = interpret_aspect(asp, mode=mode)
     action = suggest_actions_for_aspect(asp, used_hints=used_hints)
-    action_line = f" 活かし方のヒント: {action[0]}。" if action else ""
+    guidance = action[0] if action else enriched["practical_guidance"]
+    life_events = " / ".join(enriched["life_events"])
+
     return (
-        f"{p1} {aspect} {p2}: {pair_theme}。{aspect_theme}。"
-        f"オーブ{orb:.2f}°（{sign_hint}）。{action_line}"
+        f"{enriched['identity']}。"
+        f"{enriched['opener']}{enriched['psychological_dynamic']}。"
+        f"生活現象: {enriched['life_manifestation']}。"
+        f"強度と時期: {enriched['timing_or_intensity']}。"
+        f"サイン連動: {enriched['sign_interaction']}。"
+        f"ハウス連動: {enriched['house_interaction']}。"
+        f"起こりやすい場面: {life_events}。"
+        f"実践ガイド: {guidance}。"
     )
 
 
@@ -1696,6 +1700,7 @@ def _build_natal_style_interpretation(
     composite_sets: list,
     person_name: str = "あなた",
     header_lines: list[str] | None = None,
+    mode: str = "natal",
 ) -> str:
     chart = normalize_node_objects(natal_chart)
     recent_templates: dict[str, str] = {}
@@ -1748,7 +1753,7 @@ def _build_natal_style_interpretation(
     talent_lines = []
     for asp in major_aspects:
         if asp.get("aspect") in {"トライン", "セクスタイル", "コンジャンクション"}:
-            talent_lines.append(f"- {synthesize_aspect(asp, used_hints=used_hints)}")
+            talent_lines.append(f"- {synthesize_aspect(asp, used_hints=used_hints, mode=mode)}")
         if len(talent_lines) >= 4:
             break
     lines.extend(dedupe_similar_lines(talent_lines) or ["- 才能は『やってみる→調整する』の反復で自然に育ちます。"])
@@ -1757,7 +1762,7 @@ def _build_natal_style_interpretation(
     challenge_lines = []
     for asp in major_aspects:
         if asp.get("aspect") in {"スクエア", "オポジション", "クインカンクス（150°）"}:
-            challenge_lines.append(f"- {synthesize_aspect(asp, used_hints=used_hints)}")
+            challenge_lines.append(f"- {synthesize_aspect(asp, used_hints=used_hints, mode=mode)}")
         if len(challenge_lines) >= 4:
             break
     lines.extend(dedupe_similar_lines(challenge_lines) or ["- 大きな葛藤は少なめ。だからこそ、自分から課題設定すると成長が早まります。"])
@@ -2047,13 +2052,17 @@ SYNASTRY_ASPECT_TEMPLATES = {
 def synthesize_synastry_aspect(asp: dict) -> str:
     p1, p2 = asp.get("planet1"), asp.get("planet2")
     aspect = asp.get("aspect")
-    orb = float(asp.get("orb", 99.0))
     pair_key = frozenset([p1, p2])
     category = "harmonious" if aspect in {"コンジャンクション", "トライン", "セクスタイル"} else "hard"
     pair_templates = SYNASTRY_ASPECT_TEMPLATES.get(pair_key, {})
-    lead = pair_templates.get(category, f"{p1} {aspect} {p2} は、二人の関係の温度差やテンポに影響しやすい組み合わせです。")
-    orb_line = "体感としても強く出やすい配置です。" if orb <= 2.0 else "ゆるやかですが、場面が重なると効いてくる配置です。"
-    return f"{p1} {aspect} {p2}（オーブ{orb:.2f}°）: {lead} {orb_line}"
+    lead = pair_templates.get(category, f"{p1}と{p2}は関係運用のテンポ調整を学びやすい組み合わせです。")
+    enriched = interpret_aspect(asp, mode="synastry")
+    return (
+        f"{enriched['identity']}。{lead}"
+        f" 心理ダイナミクス: {enriched['psychological_dynamic']}。"
+        f" 生活現象: {enriched['life_manifestation']}。"
+        f" 実践ガイド: {enriched['practical_guidance']}。"
+    )
 
 
 def _syn_house_overlay(chart1: list[dict], cusps1: list[float], chart2: list[dict]) -> list[str]:
@@ -2165,9 +2174,7 @@ def generate_progressed_interpretation(chart: list, aspects_sets: list, composit
     gathered_aspects = [asp for aspects, _title in aspects_sets for asp in dedupe_aspects(aspects)]
     top_aspects = sorted(gathered_aspects, key=_aspect_priority_score)[:4]
     for asp in top_aspects:
-        phenomenon = f"{asp.get('planet1')}と{asp.get('planet2')}の{asp.get('aspect')}が稼働"
-        narrative = synthesize_life_narrative(phenomenon, "最近は優先順位の再設計が必要だと感じやすい", "今は一度に変える対象を1つに絞る")
-        lines.append(f"- {narrative}（オーブ{float(asp.get('orb', 99.0)):.2f}°）。")
+        lines.append(f"- {synthesize_aspect(asp, mode='progressed')}")
     if not top_aspects:
         lines.append("- 最近は大きな外圧より、内側の納得感を整えることが進展の鍵です。")
 
@@ -2178,29 +2185,44 @@ def generate_progressed_interpretation(chart: list, aspects_sets: list, composit
     lines.append("※このプログレスレポートは二次進行チャートの時期性に基づく自動生成テキストです。")
     return "\n".join(dedupe_similar_lines(lines))
 
+def build_transit_timing_window(asp: dict, window: float = 2.0) -> str:
+    orb = float(asp.get("orb", 99.0))
+    if orb > window:
+        return f"現在オーブ{orb:.2f}°で、作用の立ち上がり前後に位置しています（実務上の有効窓 ±{window:.0f}°）。"
+    return f"現在オーブ{orb:.2f}°で、実務上の有効窓（±{window:.0f}°）に入っており、出来事として体感しやすい時期です。"
+
+
 def generate_transit_interpretation(chart: list, aspects_sets: list, composite_sets: list, person_name: str = "あなた") -> str:
     header = generate_report_header("transit", person_name=person_name)
     theme = extract_transit_theme(aspects_sets)
-    base = _build_natal_style_interpretation(chart, aspects_sets, composite_sets, person_name, header)
-    return base + f"\n\n【トランジット視点の補足】\n- 今の外部テーマ: {theme}。\n- 現象を急いで評価するより、反応の良い行動を3週間単位で残すほど運気を使いやすくなります。"
+    base = _build_natal_style_interpretation(chart, aspects_sets, composite_sets, person_name, header, mode="transit")
+    all_aspects = [asp for aspects, _ in aspects_sets for asp in dedupe_aspects(aspects)]
+    top_aspect = sorted(all_aspects, key=lambda x: float(x.get("orb", 99.0)))[0] if all_aspects else None
+    timing_line = f"- タイミング窓: {build_transit_timing_window(top_aspect)}" if top_aspect else "- タイミング窓: 主要ヒットは穏やかで、準備フェーズとして使いやすい時期です。"
+    hit_line = (
+        f"- ナタルヒット: {top_aspect.get('planet1')}にトランジット{top_aspect.get('planet2')}が{top_aspect.get('aspect')}。"
+        if top_aspect
+        else "- ナタルヒット: 目立つ単発ヒットより、複数要因の重なりで現象化しやすい局面です。"
+    )
+    return base + f"\n\n【トランジット視点の補足】\n- 今の外部テーマ: {theme}。\n{hit_line}\n{timing_line}\n- 現象を急いで評価するより、反応の良い行動を3週間単位で残すほど運気を使いやすくなります。"
 
 
 def generate_triple_interpretation(natal_chart: list, progress_chart: list, transit_chart: list, aspect_sets: list, person_name: str = "あなた") -> str:
     header = generate_report_header("triple", person_name=person_name)
     natal_theme, progressed_theme, integrated = generate_triple_synthesis(natal_chart, progress_chart, aspect_sets)
     lines = header + [
-        "\n1. 本来の性質（ネイタル）",
+        "\n1. 本質（ネイタル）",
         f"- {natal_theme}",
-        "\n2. 最近の内面変化（プログレス）",
+        "\n2. 現在の内面（プログレス）",
         f"- {progressed_theme}",
-        "\n3. 今の外部の流れ（トランジット）",
+        "\n3. 外部環境（トランジット）",
         f"- {extract_transit_theme(aspect_sets)}。",
-        "\n4. なぜ今この時期なのか（統合）",
+        "\n4. 統合ポイント",
         f"- {integrated}",
-        "\n5. 今どう動くと良いか",
+        "\n5. 実践アクション",
         "- 今は短期成果より、行動の再現性を優先して『毎週同じ振り返りフォーマット』を運用すると流れが安定します。",
         "\n" + "=" * 60,
-        "※このトリプルレポートは3種類のチャート統合に基づく自動生成テキストです。",
+        "※このトリプルレポートはネイタル・プログレス・トランジット統合に基づく自動生成テキストです。",
     ]
     return "\n".join(lines)
 
@@ -2211,6 +2233,7 @@ def generate_natal_interpretation(natal_chart: list, aspects_sets: list, composi
         composite_sets,
         person_name,
         generate_report_header("natal", person_name=person_name),
+        mode="natal",
     )
 
 
