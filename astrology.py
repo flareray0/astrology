@@ -1577,44 +1577,216 @@ SYNASTRY_SECTION_TITLES = {
     "growth": "【6. この関係が育てるテーマ】",
 }
 
+MAJOR_RELATIONSHIP_ASPECTS = {"コンジャンクション", "オポジション", "トライン", "スクエア", "セクスタイル", "クインカンクス（150°）"}
+DEEMPHASIZED_MINOR_ASPECTS = {
+    "ノヴァイル（40°）", "セスキコードレート（135°）", "セプタイル（51.43°）", "バイセプタイル（102.86°）",
+    "トライセプタイル（154.29°）", "バイクインタイル（144°）", "クァドノヴァイル（160°）", "ビノヴァイル（80°）",
+}
+
+SECTION_TEMPLATE_PATTERNS = {
+    "attraction_reason": [["aspect", "emotion"], ["emotion", "aspect"], ["aspect"], ["hint_only"]],
+    "emotional": [["emotion", "aspect", "hint"], ["aspect", "emotion"], ["emotion", "hint"], ["aspect"]],
+    "romance": [["aspect", "emotion", "hint"], ["emotion", "aspect"], ["hint_only"], ["aspect"]],
+    "friction": [["aspect", "warning", "hint"], ["warning", "hint"], ["aspect", "hint"], ["hint_only"]],
+    "stability": [["aspect", "hint"], ["hint", "aspect"], ["hint_only"], ["aspect", "emotion"]],
+    "growth": [["emotion", "aspect"], ["aspect", "emotion", "hint"], ["emotion"], ["hint_only"]],
+}
+
 SYNASTRY_BARNUM_LINES = {
     "attraction_reason": [
-        "最初は冷静でいようとしても、なぜか相手の反応が気になりやすいでしょう。",
-        "何気ないやり取りでも、妙に印象に残る言葉が増えやすい組み合わせです。",
+        "最初は軽い雑談でも、後からじわっと印象が残るタイプの引力が働きやすいでしょう。",
+        "相手の反応速度や雰囲気に、無意識で意識が向きやすい組み合わせです。",
     ],
     "emotional": [
-        "距離が縮まるほど安心感が増す一方で、ちょっとした沈黙や温度差が気になりやすくなるかもしれません。",
+        "安心できる日は一気に距離が縮まり、疲れている日は沈黙が重く感じやすい波が出やすいでしょう。",
+        "『わかってほしい』が強いほど、言葉の少なさが不安に変換されやすい関係です。",
     ],
     "romance": [
-        "楽な関係というより、気づけば意識してしまう関係になりやすい配置です。",
+        "惹かれ方ははっきり出やすく、温度が合う日は一気に親密さが進みやすいでしょう。",
+        "ときめきの起点が似ている反面、ペース差はそのまま距離感の差に見えやすい配置です。",
     ],
     "friction": [
-        "相手を理解したい気持ちが強いぶん、期待が外れたときの揺れも大きくなりやすいでしょう。",
+        "正しさを急ぐとぶつかりやすく、意図の説明を先にすると誤解を減らしやすいでしょう。",
+        "どちらも真剣だからこそ、言葉の角度ひとつで受け取り方が大きく変わりやすい関係です。",
+    ],
+    "stability": [
+        "気分より運用を整えたときに、安心感が目に見えて増えていくタイプです。",
+        "小さな約束を守る回数が、そのまま信頼残高に直結しやすいでしょう。",
+    ],
+    "growth": [
+        "価値観の違いを処理するたびに、二人の対話力そのものが育ちやすい関係です。",
+        "恋愛の枠を超えて、意思決定の質まで磨かれやすい学習テーマがあります。",
     ],
 }
 
-SYNASTRY_ACTION_HINTS = {
-    "attraction_reason": [
-        "連絡頻度の基準を先に共有すると、誤解がかなり減ります。",
-        "会っていない日の一言メッセージを短く固定すると、安心感が安定しやすいです。",
+ACTION_HINTS_BY_THEME = {
+    "attraction": [
+        "初期3週間だけ『返信ペースの目安』を決め、期待値ギャップを先に減らしましょう。",
+        "会う頻度は回数よりリズムを固定し、次回予定をその場で1つだけ仮置きしましょう。",
     ],
-    "emotional": [
-        "気持ちを察してもらう前に、言葉で小さく確認すると安定しやすいです。",
+    "emotional_safety": [
+        "不安になった時は『事実・気持ち・お願い』の3点を1分で伝えると受け取り違いが減ります。",
+        "疲労が強い日は深い話を保留し、24時間以内の再開時間だけ先に決めましょう。",
     ],
-    "romance": [
-        "距離を詰める時期と、一人の時間を確保する時期を分けるとバランスが良くなります。",
+    "conflict_repair": [
+        "衝突時は結論より先に『何が痛かったか』を一文で共有し、反論は3分後に回しましょう。",
+        "論点が増えたら1テーマ15分に区切り、終了時に次回の続き方を固定しましょう。",
     ],
-    "friction": [
-        "衝突時は結論を急がず、まず『何がつらかったか』だけ共有するとこじれにくくなります。",
-    ],
-    "stability": [
-        "相手の反応速度ではなく、継続的な行動を見ると関係を読み違えにくくなります。",
-        "週1回だけでも『予定・連絡・お金』の3点を確認すると、長期の不安が下がります。",
+    "long_term_stability": [
+        "週1回10分で『予定・連絡・お金』を確認し、曖昧コストを先に削減しましょう。",
+        "機嫌ではなくルールで運用するため、連絡の締切時刻を二人で1つだけ決めましょう。",
     ],
     "growth": [
-        "価値観が違う話題ほど、正解探しより『相手の背景を聞く時間』を作ると成長が早まります。",
+        "価値観が割れた話題ほど、結論前に『育った環境の違い』を互いに2分ずつ話してみましょう。",
+        "月末に一度『うまくいった連携』を棚卸しし、再現できる行動だけ次月へ残しましょう。",
     ],
 }
+
+ASPECT_HINTS_BY_PAIR = {
+    frozenset(["月", "土星"]): {
+        "emotional_safety": ["安心したい日は、約束を小さく固定して守ると月土星の信頼感が育ちます。"],
+        "long_term_stability": ["真面目さが重さに変わる前に、週1回だけ『雑談だけの時間』を予定化しましょう。"],
+    },
+    frozenset(["金星", "火星"]): {
+        "attraction": ["会う頻度とスキンシップの希望を先に言葉にすると、金星火星の温度差が魅力として機能します。"],
+    },
+    frozenset(["太陽", "土星"]): {
+        "conflict_repair": ["指摘は『改善点1つ＋評価1つ』で伝えると、太陽土星の萎縮を防ぎやすくなります。"],
+    },
+    frozenset(["月", "冥王星"]): {
+        "emotional_safety": ["不安が増幅した日は沈黙を放置せず、『今は不安寄り』と短く共有して依存ループを断ちましょう。"],
+    },
+    frozenset(["水星", "火星"]): {
+        "conflict_repair": ["話し合いは『結論を急がない10分』を先に取り、言い方の速度を合わせてから本題に入りましょう。"],
+    },
+}
+
+THEME_BY_SECTION = {
+    "attraction_reason": "attraction",
+    "emotional": "emotional_safety",
+    "romance": "attraction",
+    "friction": "conflict_repair",
+    "stability": "long_term_stability",
+    "growth": "growth",
+}
+
+SECTION_SUMMARY_LINES = {
+    "attraction_reason": [
+        "この関係は『気づいたら気になる』を積み上げる型で、派手さより接触リズムの設計が効きます。",
+        "惹かれ方の初速は十分あるので、期待値を先に合わせるほど自然体の魅力が残りやすいでしょう。",
+    ],
+    "emotional": [
+        "安心は自動ではなく、言葉と反応の積み重ねで育つタイプです。",
+        "本音を急がず安全に出せる場を作るほど、感情の揺れは強みに転換しやすくなります。",
+    ],
+    "romance": [
+        "恋愛温度は高まりやすい一方で、ペース差の調整が満足度を左右します。",
+        "ときめきと安心の両立には、会う頻度・距離の詰め方を早めに言語化するのが近道です。",
+    ],
+    "friction": [
+        "すれ違いは相性の悪さより、処理手順の不一致で起きやすい配置です。",
+        "ぶつかった後の回復導線を先に作ると、衝突が関係の質を上げる材料に変わります。",
+    ],
+    "stability": [
+        "長続きの鍵は感情の強さより、運用の再現性にあります。",
+        "小さな合意を守る回数が増えるほど、将来不安は目に見えて軽くなるでしょう。",
+    ],
+    "growth": [
+        "この関係は、違いを扱う技術を二人に育てる学習装置になりやすいです。",
+        "相手の背景理解を深めるほど、恋愛以外の場面でも意思決定の質が上がります。",
+    ],
+}
+
+PAIR_SECTION_PRIORITY = {
+    frozenset(["太陽", "月"]): ["attraction_reason", "emotional"],
+    frozenset(["金星", "火星"]): ["romance", "attraction_reason"],
+    frozenset(["月", "土星"]): ["emotional", "stability"],
+    frozenset(["太陽", "土星"]): ["friction", "stability"],
+    frozenset(["月", "冥王星"]): ["emotional", "friction"],
+    frozenset(["水星", "火星"]): ["friction", "growth"],
+    frozenset(["金星", "土星"]): ["stability", "romance"],
+    frozenset(["月", "天王星"]): ["emotional", "romance"],
+    frozenset(["水星", "月"]): ["emotional", "attraction_reason"],
+    frozenset(["太陽", "金星"]): ["romance", "attraction_reason"],
+    frozenset(["火星", "土星"]): ["friction", "stability"],
+    frozenset(["月", "金星"]): ["romance", "emotional"],
+    frozenset(["水星", "金星"]): ["attraction_reason", "romance"],
+}
+
+
+def is_major_relationship_aspect(aspect_name: str) -> bool:
+    return aspect_name in MAJOR_RELATIONSHIP_ASPECTS
+
+
+def should_show_minor_aspect(asp: dict, detailed_mode: bool = False) -> bool:
+    aspect = asp.get("aspect", "")
+    if is_major_relationship_aspect(aspect):
+        return True
+    if detailed_mode:
+        return True
+    return aspect not in DEEMPHASIZED_MINOR_ASPECTS
+
+
+def classify_synastry_aspect_theme(asp: dict) -> str:
+    pair = frozenset([asp.get("planet1"), asp.get("planet2")])
+    if pair in {frozenset(["金星", "火星"]), frozenset(["太陽", "金星"]), frozenset(["月", "金星"])}:
+        return "attraction"
+    if pair in {frozenset(["月", "土星"]), frozenset(["月", "冥王星"]), frozenset(["月", "天王星"]), frozenset(["水星", "月"])}:
+        return "emotional_safety"
+    if pair in {frozenset(["太陽", "土星"]), frozenset(["火星", "土星"]), frozenset(["水星", "火星"])}:
+        return "conflict_repair"
+    if pair in {frozenset(["金星", "土星"])}:
+        return "long_term_stability"
+    return "growth"
+
+
+def assign_aspect_to_section(aspects: list[dict]) -> dict[str, list[dict]]:
+    assigned = {k: [] for k in SYNASTRY_SECTION_TITLES}
+    used_keys: set[tuple[frozenset[str], str]] = set()
+    for asp in aspects:
+        pair = frozenset([asp.get("planet1"), asp.get("planet2")])
+        key = (pair, asp.get("aspect"))
+        if key in used_keys:
+            continue
+        priorities = PAIR_SECTION_PRIORITY.get(pair)
+        if not priorities:
+            theme = classify_synastry_aspect_theme(asp)
+            default_by_theme = {
+                "attraction": "romance",
+                "emotional_safety": "emotional",
+                "conflict_repair": "friction",
+                "long_term_stability": "stability",
+                "growth": "growth",
+            }
+            priorities = [default_by_theme.get(theme, "growth")]
+        target = next((sec for sec in priorities if len(assigned[sec]) < 2), priorities[0])
+        assigned[target].append(asp)
+        used_keys.add(key)
+    return assigned
+
+
+def choose_non_repeating_action_hint(section_key: str, used_hints: set[str], aspects: list[dict]) -> str | None:
+    theme = THEME_BY_SECTION.get(section_key, "growth")
+    pair_specific = []
+    for asp in aspects:
+        pair = frozenset([asp.get("planet1"), asp.get("planet2")])
+        pair_specific.extend(ASPECT_HINTS_BY_PAIR.get(pair, {}).get(theme, []))
+    for hint in pair_specific + ACTION_HINTS_BY_THEME.get(theme, []):
+        if hint not in used_hints:
+            used_hints.add(hint)
+            return hint
+    return None
+
+
+def choose_non_repeating_relation_template(section_key: str, used_patterns: set[tuple[str, ...]]) -> list[str]:
+    for pattern in SECTION_TEMPLATE_PATTERNS.get(section_key, [["aspect", "emotion"]]):
+        key = tuple(pattern)
+        if key not in used_patterns:
+            used_patterns.add(key)
+            return pattern
+    return SECTION_TEMPLATE_PATTERNS.get(section_key, [["aspect", "emotion"]])[0]
+
+
 
 SYNASTRY_ASPECT_TEMPLATES = {
     frozenset(["太陽", "月"]): {
@@ -1633,44 +1805,11 @@ SYNASTRY_ASPECT_TEMPLATES = {
         "harmonious": "月と冥王星が強く結びつくと、表面だけでは終わらない深い共感が起き、忘れにくい絆になりやすいでしょう。",
         "hard": "月と冥王星がハードだと、愛情と不安が同時に強まり、相手の気配に敏感になりすぎることがあります。",
     },
-    frozenset(["月", "天王星"]): {
-        "harmonious": "月と天王星が調和すると、友達のような自由さと恋愛の新鮮さが同居し、マンネリを避けやすくなります。",
-        "hard": "月と天王星がハードだと、急に会いたくなる日と一人になりたい日の振れ幅が大きく、安心感が乱れやすいでしょう。",
-    },
-    frozenset(["水星", "月"]): {
-        "harmonious": "水星と月が調和すると、短い言葉でも気持ちが伝わりやすく、日常の会話が心のケアになりやすい関係です。",
-        "hard": "水星と月がハードだと、事実の話と感情の話がすれ違いやすく、『わかってほしい点』が噛み合いにくくなります。",
-    },
-    frozenset(["金星", "土星"]): {
-        "harmonious": "金星と土星の調和は、派手さより誠実さで愛情を深める配置で、時間とともに信頼が積み上がります。",
-        "hard": "金星と土星がハードだと、愛情表現が控えめになりすぎて『気持ちがないのかも』と誤解しやすくなります。",
-    },
-    frozenset(["太陽", "土星"]): {
-        "harmonious": "太陽と土星が調和すると、目標達成に向けて互いを支える現実的なパートナーシップが育ちます。",
-        "hard": "太陽と土星がハードだと、正しさの指摘が評価に聞こえやすく、自己肯定感を守る工夫が必要になります。",
-    },
-    frozenset(["太陽", "金星"]): {
-        "harmonious": "太陽と金星が調和すると、存在そのものを好意的に受け取りやすく、自然体で好感が育つ関係です。",
-        "hard": "太陽と金星がハードだと、好みの違いが魅力にも摩擦にもなり、デートの優先順位で迷いやすくなります。",
-    },
-    frozenset(["火星", "土星"]): {
-        "harmonious": "火星と土星が調和すると、勢いと計画性の役割分担がはまりやすく、実務面で強いチームになります。",
-        "hard": "火星と土星がハードだと、急ぎたい側と慎重な側でペースの衝突が起きやすく、苛立ちを溜めやすいでしょう。",
-    },
-    frozenset(["月", "金星"]): {
-        "harmonious": "月と金星が調和すると、優しさの示し方が似ていて、触れ方や気遣いが安心感につながりやすいです。",
-        "hard": "月と金星がハードだと、甘えたいタイミングがずれて『大切にされていない感覚』が出やすくなります。",
-    },
-    frozenset(["水星", "金星"]): {
-        "harmonious": "水星と金星が調和すると、会話に柔らかさが生まれ、褒め言葉や冗談が関係の潤滑油になります。",
-        "hard": "水星と金星がハードだと、言葉のセンスが合わない日があり、軽い発言でも印象に残りやすいでしょう。",
-    },
     frozenset(["水星", "火星"]): {
         "harmonious": "水星と火星が調和すると、話し合いから行動への移行が早く、計画を現実にしやすい関係です。",
         "hard": "水星と火星がハードだと、議論が勝ち負けになりやすく、正論ほど角が立ちやすい傾向があります。",
     },
 }
-
 
 def synthesize_synastry_aspect(asp: dict) -> str:
     p1, p2 = asp.get("planet1"), asp.get("planet2")
@@ -1680,11 +1819,8 @@ def synthesize_synastry_aspect(asp: dict) -> str:
     category = "harmonious" if aspect in {"コンジャンクション", "トライン", "セクスタイル"} else "hard"
     pair_templates = SYNASTRY_ASPECT_TEMPLATES.get(pair_key, {})
     lead = pair_templates.get(category, f"{p1} {aspect} {p2} は、二人の関係の温度差やテンポに影響しやすい組み合わせです。")
-    if category == "harmonious":
-        close = "惹かれやすさを活かすには、心地よい瞬間を言葉にして共有すると安定しやすいです。"
-    else:
-        close = "ずれを責めるより、どの場面で起きるかを先に言語化すると関係を整えやすくなります。"
-    return f"{p1} {aspect} {p2}（オーブ{orb:.2f}°）: {lead} {close}"
+    orb_line = "体感としても強く出やすい配置です。" if orb <= 2.0 else "ゆるやかですが、場面が重なると効いてくる配置です。"
+    return f"{p1} {aspect} {p2}（オーブ{orb:.2f}°）: {lead} {orb_line}"
 
 
 def _syn_house_overlay(chart1: list[dict], cusps1: list[float], chart2: list[dict]) -> list[str]:
@@ -1715,12 +1851,31 @@ def _pick_barnum_line(section_key: str, used: set[str]) -> str | None:
     return None
 
 
-def _pick_action_hint(section_key: str, used: set[str]) -> str | None:
-    for hint in SYNASTRY_ACTION_HINTS.get(section_key, []):
-        if hint not in used:
-            used.add(hint)
-            return hint
-    return None
+def _append_synastry_section(lines: list[str], section_key: str, aspects: list[dict], used_barnum: set[str], used_hints: set[str], used_patterns: set[tuple[str, ...]]) -> None:
+    lines.append("\n" + SYNASTRY_SECTION_TITLES[section_key])
+    pattern = choose_non_repeating_relation_template(section_key, used_patterns)
+    barnum = _pick_barnum_line(section_key, used_barnum)
+    hint = choose_non_repeating_action_hint(section_key, used_hints, aspects)
+    warning = "- 衝突を避けるより、回復の手順を先に決めるほど関係の消耗が減ります。"
+
+    for item in pattern:
+        if item == "aspect":
+            for asp in aspects[:2]:
+                lines.append(f"- {synthesize_synastry_aspect(asp)}")
+        elif item == "emotion" and barnum:
+            lines.append(f"- {barnum}")
+        elif item == "hint" and hint:
+            lines.append(f"- 行動ヒント: {hint}")
+        elif item == "warning":
+            lines.append(warning)
+        elif item == "hint_only" and hint:
+            lines.append(f"- 行動ヒント: {hint}")
+
+    if not aspects and section_key in {"attraction_reason", "emotional", "romance", "friction"}:
+        lines.append("- 今回は該当アスペクトが少なめですが、日常のやり取りの質を整えると体感は十分に変わります。")
+
+    for summary in SECTION_SUMMARY_LINES.get(section_key, [])[:2]:
+        lines.append(f"- {summary}")
 
 
 def generate_synastry_interpretation(
@@ -1732,76 +1887,22 @@ def generate_synastry_interpretation(
     person1_cusps: list[float] | None = None,
 ) -> str:
     lines = generate_report_header("synastry", person_name=person1_name, person2_name=person2_name)
-    used_barnum, used_hints = set(), set()
+    used_barnum, used_hints, used_patterns = set(), set(), set()
+
     deduped_aspects = dedupe_aspects(synastry_aspects)
-    selected = [a for a in deduped_aspects if frozenset([a.get("planet1"), a.get("planet2")]) in SYN_PRIORITY_PAIRS]
-    selected = sorted(selected, key=lambda x: (SYN_PRIORITY_PAIRS.index(frozenset([x.get("planet1"), x.get("planet2")])) if frozenset([x.get("planet1"), x.get("planet2")]) in SYN_PRIORITY_PAIRS else 99, float(x.get("orb", 99.0))))
+    filtered_aspects = [a for a in deduped_aspects if should_show_minor_aspect(a, detailed_mode=False)]
+    selected = [a for a in filtered_aspects if frozenset([a.get("planet1"), a.get("planet2")]) in SYN_PRIORITY_PAIRS]
+    selected = sorted(
+        selected,
+        key=lambda x: (
+            SYN_PRIORITY_PAIRS.index(frozenset([x.get("planet1"), x.get("planet2")])) if frozenset([x.get("planet1"), x.get("planet2")]) in SYN_PRIORITY_PAIRS else 99,
+            float(x.get("orb", 99.0)),
+        ),
+    )
 
-    harmonious = [a for a in selected if a.get("aspect") in {"コンジャンクション", "トライン", "セクスタイル"}]
-    hard = [a for a in selected if a.get("aspect") in {"スクエア", "オポジション", "クインカンクス（150°）"}]
-
-    lines.append("\n" + SYNASTRY_SECTION_TITLES["attraction_reason"])
-    for asp in harmonious[:3]:
-        lines.append(f"- {synthesize_synastry_aspect(asp)}")
-    if not harmonious:
-        lines.append("- この関係は、派手な始まりより『話しやすい空気』を積み重ねるほど惹かれ方が深まる流れです。")
-    b = _pick_barnum_line("attraction_reason", used_barnum)
-    if b:
-        lines.append(f"- {b}")
-    h = _pick_action_hint("attraction_reason", used_hints)
-    if h:
-        lines.append(f"- 行動ヒント: {h}")
-
-    lines.append("\n" + SYNASTRY_SECTION_TITLES["emotional"])
-    emo = [a for a in selected if frozenset([a.get("planet1"), a.get("planet2")]) in {frozenset(["月", "土星"]), frozenset(["月", "冥王星"]), frozenset(["月", "天王星"]), frozenset(["水星", "月"]), frozenset(["月", "金星"])}]
-    for asp in emo[:2]:
-        lines.append(f"- {synthesize_synastry_aspect(asp)}")
-    lines.append("- 本音を共有できる日は一気に近づきますが、疲れている日の反応差は誤解になりやすい組み合わせです。")
-    b = _pick_barnum_line("emotional", used_barnum)
-    if b:
-        lines.append(f"- {b}")
-    h = _pick_action_hint("emotional", used_hints)
-    if h:
-        lines.append(f"- 行動ヒント: {h}")
-
-    lines.append("\n" + SYNASTRY_SECTION_TITLES["romance"])
-    romance = [a for a in selected if frozenset([a.get("planet1"), a.get("planet2")]) in {frozenset(["金星", "火星"]), frozenset(["太陽", "金星"]), frozenset(["水星", "金星"])}]
-    for asp in romance[:2]:
-        lines.append(f"- {synthesize_synastry_aspect(asp)}")
-    lines.append("- 惹かれる瞬間がはっきり出やすい反面、会う頻度やスキンシップの温度差がある日は戸惑いが残りやすいでしょう。")
-    b = _pick_barnum_line("romance", used_barnum)
-    if b:
-        lines.append(f"- {b}")
-    h = _pick_action_hint("romance", used_hints)
-    if h:
-        lines.append(f"- 行動ヒント: {h}")
-
-    lines.append("\n" + SYNASTRY_SECTION_TITLES["friction"])
-    for asp in hard[:3]:
-        lines.append(f"- {synthesize_synastry_aspect(asp)}")
-    if not hard:
-        lines.append("- 大きな衝突は少なめですが、我慢を美徳にすると小さな違和感が蓄積しやすくなります。")
-    b = _pick_barnum_line("friction", used_barnum)
-    if b:
-        lines.append(f"- {b}")
-    h = _pick_action_hint("friction", used_hints)
-    if h:
-        lines.append(f"- 行動ヒント: {h}")
-
-    lines.append("\n" + SYNASTRY_SECTION_TITLES["stability"])
-    lines.append("- 長続きの鍵は、気分で運用しないことです。連絡頻度・お金・会う計画の基準を決めるほど安心感が育ちます。")
-    if any(frozenset([a.get("planet1"), a.get("planet2")]) in {frozenset(["月", "土星"]), frozenset(["金星", "土星"]), frozenset(["太陽", "土星"]), frozenset(["火星", "土星"])} for a in selected):
-        lines.append("- 土星系アスペクトがあるため、ルール化は重さではなく『信頼の貯金』として効きやすい配置です。")
-    h = _pick_action_hint("stability", used_hints)
-    if h:
-        lines.append(f"- 行動ヒント: {h}")
-
-    lines.append("\n" + SYNASTRY_SECTION_TITLES["growth"])
-    lines.append("- この関係は、違いを否定せず運用方法を作る力を育てます。恋愛だけでなく、仕事や生活の意思決定にも応用しやすい学びです。")
-    lines.append("- 期待を察してもらう関係から、期待を言語化して調整できる関係へ進むほど、二人の器が大きくなります。")
-    h = _pick_action_hint("growth", used_hints)
-    if h:
-        lines.append(f"- 行動ヒント: {h}")
+    section_aspects = assign_aspect_to_section(selected)
+    for section_key in ["attraction_reason", "emotional", "romance", "friction", "stability", "growth"]:
+        _append_synastry_section(lines, section_key, section_aspects.get(section_key, []), used_barnum, used_hints, used_patterns)
 
     if person1_cusps:
         overlays = _syn_house_overlay(person1_chart, person1_cusps, person2_chart)
@@ -1812,7 +1913,6 @@ def generate_synastry_interpretation(
     lines.append("\n" + "=" * 60)
     lines.append("※この相性レポートは2人の天体配置に基づく自動生成テキストです。")
     return "\n".join(lines)
-
 
 def generate_progressed_interpretation(chart: list, aspects_sets: list, composite_sets: list, person_name: str = "あなた") -> str:
     header = generate_report_header("progressed", person_name=person_name)
