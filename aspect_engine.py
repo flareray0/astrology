@@ -47,6 +47,28 @@ MODE_FOCUS = {
 
 OPENERS = ["この配置は", "この角度では", "この組み合わせは", "この天体関係は"]
 
+ASPECT_INTENSITY = {
+    "conjunction": "テーマが一点集中しやすく、決断や反応が速まりやすい",
+    "sextile": "協力ルートを掴むほど成果が積み上がりやすい",
+    "square": "課題が露出しやすく、修正行動が成長に直結しやすい",
+    "trine": "自然な流れで強みを使いやすく、結果が安定しやすい",
+    "opposition": "他者や外的状況を鏡にして、盲点を補いやすい",
+}
+
+MODE_PROMPTS = {
+    "natal": "性格傾向としては、自己像と対人反応の両方にこの力学が残りやすい",
+    "progressed": "今期は内面的な価値観の更新として、このテーマを再学習しやすい",
+    "transit": "現在は外部イベントとして表面化しやすく、短い時間窓で選択を迫られやすい",
+    "triple": "出生図の資質・プログレスの心理変化・トランジットの刺激が重なり、現実テーマとして統合を求められやすい",
+    "synastry": "関係性では引力と摩擦の両面が出やすく、相互理解の設計が成果を左右しやすい",
+}
+
+LIFE_EVENT_OVERRIDES = {
+    "天王星|火星": ["急な予定変更や突発対応", "勢いで決めた判断の見直し", "対人場面での衝突リスク管理"],
+    "木星|金星": ["社交機会の拡大", "恋愛・協業でのチャンス増加", "創作や審美活動の追い風"],
+    "土星|月": ["家族責任やケア負荷の再調整", "感情の耐久テスト", "安心できる生活基盤の再設計"],
+}
+
 
 def _max_orb(planet1: str, planet2: str) -> float:
     max_orb = 6.0
@@ -133,6 +155,14 @@ def _choose_opener(p1: str, p2: str, aspect_type: str) -> str:
     return OPENERS[seed % len(OPENERS)]
 
 
+def _life_events(pair_key: str, pair_info: dict) -> list[str]:
+    return LIFE_EVENT_OVERRIDES.get(pair_key, pair_info.get("life_patterns", ["日々の優先順位の再調整"]))[:3]
+
+
+def _mode_specific_line(mode: str) -> str:
+    return MODE_PROMPTS.get(mode, MODE_PROMPTS["natal"])
+
+
 def interpret_aspect(aspect_data: dict, mode: str = "natal") -> dict:
     classified = classify_aspect(aspect_data)
     p1, p2 = classified["planets"]
@@ -144,17 +174,17 @@ def interpret_aspect(aspect_data: dict, mode: str = "natal") -> dict:
     rule = rules.get(_rule_key(p1, p2, aspect_type), {})
     pair_info = pairs.get(_pair_key(p1, p2), pairs.get("default", {}))
 
-    life_patterns = pair_info.get("life_patterns", ["行動結果のばらつき"])
+    life_patterns = _life_events(_pair_key(p1, p2), pair_info)
     mode_focus = MODE_FOCUS.get(mode, MODE_FOCUS["natal"])
     opener = _choose_opener(p1, p2, aspect_type)
 
     psychological_dynamic = rule.get(
         "psychology",
-        f"{pair_info.get('core_tension', '価値観の調整')}。{ASPECT_TYPE_MEANING.get(aspect_type, '関係性を更新する角度')}。",
+        f"{pair_info.get('core_tension', '価値観の調整')}。{ASPECT_TYPE_MEANING.get(aspect_type, '関係性を更新する角度')}。{ASPECT_INTENSITY.get(aspect_type, '状況認識を更新しやすい')}。",
     )
     life_manifestation = rule.get(
         "life_manifestation",
-        f"{life_patterns[0]}を起点に、{life_patterns[1]}へ連鎖しやすい。",
+        f"{life_patterns[0]}が起点になり、{life_patterns[1]}や{life_patterns[2]}へ波及しやすい。",
     )
     practical_guidance = rule.get(
         "advice",
@@ -167,7 +197,7 @@ def interpret_aspect(aspect_data: dict, mode: str = "natal") -> dict:
         "opener": opener,
         "psychological_dynamic": psychological_dynamic,
         "life_manifestation": life_manifestation,
-        "timing_or_intensity": f"{strength_narrative(classified['orb'])}。{mode_focus}。",
+        "timing_or_intensity": f"{strength_narrative(classified['orb'])}。{mode_focus}。{_mode_specific_line(mode)}。",
         "practical_guidance": practical_guidance,
         "sign_interaction": sign_interaction(classified["signs"][0], classified["signs"][1]),
         "house_interaction": house_interaction(classified["houses"][0], classified["houses"][1]),
