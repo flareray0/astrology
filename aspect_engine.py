@@ -63,6 +63,14 @@ MODE_PROMPTS = {
     "synastry": "関係性では引力と摩擦の両面が出やすく、相互理解の設計が成果を左右しやすい",
 }
 
+MODE_LIFE_CONTEXT = {
+    "natal": "生まれ持った傾向として反復しやすいテーマです",
+    "progressed": "最近の内面的変化として自覚しやすいテーマです",
+    "transit": "今の外部刺激や時期性として体感しやすいテーマです",
+    "triple": "本質・内面変化・外的刺激が重なって意味が強まるテーマです",
+    "synastry": "二人の関係性の相互反応として現れやすいテーマです",
+}
+
 LIFE_EVENT_OVERRIDES = {
     "天王星|火星": ["急な予定変更や突発対応", "勢いで決めた判断の見直し", "対人場面での衝突リスク管理"],
     "木星|金星": ["社交機会の拡大", "恋愛・協業でのチャンス増加", "創作や審美活動の追い風"],
@@ -163,6 +171,10 @@ def _mode_specific_line(mode: str) -> str:
     return MODE_PROMPTS.get(mode, MODE_PROMPTS["natal"])
 
 
+def _mode_life_context(mode: str) -> str:
+    return MODE_LIFE_CONTEXT.get(mode, MODE_LIFE_CONTEXT["natal"])
+
+
 def interpret_aspect(aspect_data: dict, mode: str = "natal") -> dict:
     classified = classify_aspect(aspect_data)
     p1, p2 = classified["planets"]
@@ -182,10 +194,11 @@ def interpret_aspect(aspect_data: dict, mode: str = "natal") -> dict:
         "psychology",
         f"{pair_info.get('core_tension', '価値観の調整')}。{ASPECT_TYPE_MEANING.get(aspect_type, '関係性を更新する角度')}。{ASPECT_INTENSITY.get(aspect_type, '状況認識を更新しやすい')}。",
     )
-    life_manifestation = rule.get(
+    base_life_manifestation = rule.get(
         "life_manifestation",
         f"{life_patterns[0]}が起点になり、{life_patterns[1]}や{life_patterns[2]}へ波及しやすい。",
     )
+    life_manifestation = f"{base_life_manifestation} {_mode_life_context(mode)}"
     practical_guidance = rule.get(
         "advice",
         f"{pair_info.get('growth_theme', '運用ルールを明確化する')}。",
