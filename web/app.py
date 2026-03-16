@@ -127,6 +127,7 @@ def _render_page(request: Request, form_values: dict, report_payload: dict | Non
         "result_path": report_payload.get("result_path", "") if report_payload else "",
         "interpretation_path": report_payload.get("interpretation_path", "") if report_payload else "",
         "error_message": error_message,
+        "uscs_phase": report_payload.get("uscs_phase") if report_payload else None,
     }
     return templates.TemplateResponse(request, "index.html", context)
 
@@ -200,6 +201,7 @@ async def _api_report(mode: str, **kwargs) -> JSONResponse:
                 "result_path": payload.get("result_path"),
                 "interpretation_path": payload.get("interpretation_path"),
                 "aspect_count": _aspect_count(payload.get("aspects", [])),
+                "uscs_phase": payload.get("uscs_phase"),
             }
         )
     except Exception as exc:

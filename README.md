@@ -165,3 +165,24 @@ The CLI prints the report and saves both output files under `data/results/`.
 - エフェメリスは `ASTROLOGY_EPHE_PATH` → `data/ephemeris` → `ephemeris` → `data/ephe` → `ephe` の順で自動検出されます。
 - 有効な `.se1` ファイルが見つからない場合は、探索パス付きのエラーで起動に失敗します。
 
+
+
+## USCS補助レイヤー（位相モデル）
+
+このリポジトリは既存の占星術ロジック（天体計算・orb判定・通常解釈）を保持したまま、
+**USCS的な位相補助レイヤー**を追加しています。
+
+- 既存のアスペクト判定（orbベース）は main として維持
+- phase/coherence/resonance は supplement として追加
+- とくに `synastry` / `triple` で補助指標が有効
+
+主な設定:
+
+- `USE_USCS_PHASE`（または FastAPI 側は `ASTROLOGY_USE_USCS_PHASE`）
+  - `true/1`: 位相補助指標をON
+  - `false/0`: 従来挙動（orb中心）
+- `USCS_VERBOSE`（または `ASTROLOGY_USCS_VERBOSE`）
+  - 開発時の詳細表示フラグ
+
+補助指標の表示名は一般向けに、
+「同期度」「共鳴度」「集中度」など自然な表現を使っています。
