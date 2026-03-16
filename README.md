@@ -113,3 +113,31 @@ The CLI prints the report and saves both output files under `data/results/`.
 - Repository audit and missing-piece summary: [docs/repo_audit.md](docs/repo_audit.md)
 - Primary web entry point: [web/app.py](web/app.py)
 - Main chart/report engine: [astrology.py](astrology.py)
+
+## 日本語補足（API・出力・注意点）
+
+### Web API（日本語）
+
+- `GET /`
+- `GET /health`
+- `POST /api/report`
+- `POST /api/report/natal`
+- `POST /api/report/progressed`
+- `POST /api/report/transit`
+- `POST /api/report/triple`
+- `POST /api/report/synastry`
+
+`/api/report` はHTMLページへ結果を再描画します。モード別APIは JSON で解釈文と保存先パスを返します。
+
+### 出力ファイル（日本語）
+
+生成ファイルは `data/results/` に保存されます。
+
+- `astrology_result.txt`
+- `astrology_interpretation.txt`
+
+### 注意点（日本語）
+
+- エフェメリスは `ASTROLOGY_EPHE_PATH` → `data/ephemeris` → `ephemeris` → `data/ephe` → `ephe` の順で自動検出されます。
+- 有効な `.se1` ファイルが見つからない場合は、探索パス付きのエラーで起動に失敗します。
+
