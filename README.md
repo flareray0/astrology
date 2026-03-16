@@ -52,6 +52,30 @@ python astrology.py
 python astrology.py --non-interactive
 ```
 
+## Quick auto setup/start scripts (かんたん起動 ✨)
+
+このリポジトリには、セットアップ有無を自動判定して起動するスクリプトを追加しています。
+
+### macOS / Linux
+
+```bash
+./start_auto.sh
+```
+
+### Windows (cmd.exe)
+
+```bat
+start_auto.bat
+```
+
+補足:
+
+- 初回は `.venv` の作成と `requirements.txt` のインストールを自動実行
+- 2回目以降は依存が揃っていればそのまま起動
+- セットアップだけ実行する場合: `--setup-only`
+- ホットリロード無効化: `--no-reload`
+- venv 自動アクティベート対応（Windows は自動、macOS/Linux は `source start_auto.sh --setup-only` で現在シェルへ反映）
+
 ## Supported chart modes
 
 - `natal`
