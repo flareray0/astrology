@@ -13,6 +13,45 @@ uvicorn web.app:app --reload
 
 Open `http://127.0.0.1:8000`.
 
+## 日本語での使い方 (。・ω・。)
+
+### 1) セットアップ
+
+```bash
+git clone <repo>
+cd astrology
+pip install -r requirements.txt
+```
+
+### 2) Webアプリ起動
+
+```bash
+uvicorn web.app:app --reload
+```
+
+ブラウザで `http://127.0.0.1:8000` を開き、フォームに以下を入力します。
+
+- チャートモード（`natal / progressed / transit / triple / synastry`）
+- 生年月日
+- 出生時刻
+- 緯度・経度
+- タイムゾーン
+- （シナストリー時）2人目の情報
+
+「Generate report」を押すと、画面下に解釈テキストが表示されます。
+
+### 3) CLI実行（ターミナル）
+
+```bash
+python astrology.py
+```
+
+対話形式で入力してレポートを生成します。既定値で実行する場合:
+
+```bash
+python astrology.py --non-interactive
+```
+
 ## Supported chart modes
 
 - `natal`
@@ -71,6 +110,6 @@ The CLI prints the report and saves both output files under `data/results/`.
 
 ## Notes
 
-- Repository audit and missing-piece summary: [docs/repo_audit.md](/H:/astrology/docs/repo_audit.md)
-- Primary web entry point: [web/app.py](/H:/astrology/web/app.py)
-- Main chart/report engine: [astrology.py](/H:/astrology/astrology.py)
+- Repository audit and missing-piece summary: [docs/repo_audit.md](docs/repo_audit.md)
+- Primary web entry point: [web/app.py](web/app.py)
+- Main chart/report engine: [astrology.py](astrology.py)

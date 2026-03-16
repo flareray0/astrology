@@ -13,20 +13,12 @@
 - Report generation: `generate_natal_interpretation(...)`, `generate_progressed_interpretation(...)`, `generate_transit_interpretation(...)`, `generate_triple_interpretation(...)`, `generate_synastry_interpretation(...)`, `run_report_by_mode(...)`
 - Aspect meaning layer: `aspect_engine.interpret_aspect(...)`
 
-## Missing or incomplete pieces before implementation
-- `web/app.py` was a stub and did not call the astrology engine.
-- `web/templates/index.html` only supported mode and name, with no birth data fields or synastry input.
-- Mode-specific API endpoints were missing.
-- Output files defaulted to repo root instead of `data/results/`.
-- CLI flow depended on hard-coded constants instead of a usable interactive run path.
-- Interpretation helper functions requested by spec were not exposed with stable names:
-  - `interpret_planet_position()`
-  - `interpret_house_overlay()`
-  - `synthesize_interpretation()`
-- Ephemeris detection existed, but its search order did not match the required order exactly.
+## Missing pieces identified before implementation
+- Needed robust validation for synastry second-person fields in the web request path.
+- Needed consistent API `aspect_count` semantics for `triple` mode (nested aspect sets).
+- Needed a deterministic local test invocation path so imports resolve in this repo layout.
 
-## Implementation direction
-- Keep the existing chart and report engine.
-- Add thin interpretation wrappers rather than replacing the working narrative generator.
-- Make `uvicorn web.app:app --reload` the primary supported run target.
-- Persist both structured summary and narrative interpretation under `data/results/`.
+## Implemented in this pass
+- Added strict synastry input validation in `web/app.py` to fail fast with a clear error for blank second-person date/time.
+- Added `_aspect_count(...)` helper in `web/app.py` so `/api/report/*` returns a true aggregate count for both flat and nested aspect payloads.
+- Added `pytest.ini` with `pythonpath = .` so local test execution works from a clean clone without manual `PYTHONPATH` export.
