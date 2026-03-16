@@ -1,100 +1,101 @@
-# astrology
+# Astrology Local App Scaffold
 
-`astrology.py` を正本として、Swiss Ephemeris の参照先を **環境変数 + 自動探索** で統一しました。
-Notebook / FastAPI / スクリプトのどこから呼んでも同じ解決ロジックを使います。
+このリポジトリは、占星術エンジンをローカルで起動し、`localhost` から試せる状態まで持っていくための土台です。
 
-## Ephemeris の配置場所（同梱前提）
+## 目的
+- `git clone` 後にローカル起動できる
+- Swiss Ephemeris (`.se1`) を repo 内から自動検出できる
+- Natal / Progressed / Transit / Triple / Synastry を扱える
+- FastAPI + HTML フォームでブラウザから試せる
 
-このリポジトリは Swiss Ephemeris ファイル（`.se1`）を **`ephemeris/` に同梱** して使う前提です。
-
-- `ephemeris/sepl_18.se1`
-- `ephemeris/seas_18.se1`
-- `ephemeris/semo_*.se1` など
-
-clone 後に追加配置しなくても、そのまま動作します。
-
-## 環境変数で明示指定
-
-```bash
-ASTROLOGY_EPHE_PATH=/path/to/ephemeris
+## 推奨ディレクトリ構成
+```text
+astrology/
+├─ astrology.py
+├─ aspect_engine.py
+├─ interpretation_engine.py
+├─ report_engine.py
+├─ web/
+│  ├─ app.py
+│  ├─ templates/
+│  │  └─ index.html
+│  └─ static/
+├─ data/
+│  ├─ ephemeris/
+│  │  ├─ *.se1
+│  └─ results/
+├─ requirements.txt
+├─ Dockerfile
+├─ docker-compose.yml
+├─ .env.example
+└─ README.md
 ```
 
-- 指定時は最優先で使用
-- 空欄なら自動探索
-
-`.env.example` では次のように設定しています:
-
-```env
-ASTROLOGY_EPHE_PATH=
-RESULT_OUTPUT_DIR=data/results
-APP_ENV=dev
-```
-
-## 自動探索の仕様
-
-`astrology.configure_ephemeris()` は次を実施します。
-
-1. `ASTROLOGY_EPHE_PATH` を確認
-2. repo / cwd の候補ディレクトリを順次探索
-3. Swiss Ephemeris らしいファイル（`se*.se1` 1つ以上、または `sefstars.txt`）を検証
-4. 見つかったパスを `swe.set_ephe_path(...)` に設定
-5. 解決元と採用パスをログ表示
-
-見つからない場合は、探索した候補一覧付きでエラーを返します。
-
-## Colab での使い方
-
-```python
-!git clone <repo-url>
-%cd astrology
-!pip install -r requirements.txt
-
-import astrology
-astrology.print_ephemeris_status()
-```
-
-`ASTROLOGY_EPHE_PATH` を固定で書かなくても、同梱済み `ephemeris/` を自動検出します。
-
-## Windows / Linux での使い方
-
-### Windows (PowerShell)
-
+## クイックスタート（ローカル）
+### Windows PowerShell
 ```powershell
-git clone <repo-url>
+git clone <YOUR_REPO_URL>
 cd astrology
 python -m venv .venv
-.venv\Scripts\activate
+.\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-$env:ASTROLOGY_EPHE_PATH = "C:\path\to\ephemeris"  # 任意
-python scripts/run_natal_example.py
+copy .env.example .env
+uvicorn web.app:app --reload
 ```
 
 ### Linux / macOS
-
 ```bash
-git clone <repo-url>
+git clone <YOUR_REPO_URL>
 cd astrology
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-export ASTROLOGY_EPHE_PATH=/path/to/ephemeris  # 任意
-python scripts/run_natal_example.py
+cp .env.example .env
+uvicorn web.app:app --reload
 ```
 
-## FastAPI との整合
-
-FastAPI (`app/services/astrology_service.py`) でも `astrology.configure_ephemeris(...)` を呼ぶため、
-Web/API 実行時も同じ解決ロジックになります。
-
-## 動作確認
-
-```bash
-python -c "import astrology; astrology.print_ephemeris_status()"
-python scripts/run_natal_example.py
+ブラウザ:
+```text
+http://127.0.0.1:8000
 ```
 
-最低ライン:
+## Colab から試す
+private repo の場合は token を使って clone してください。
+```python
+import getpass, os
+token = getpass.getpass("GitHub Token: ")
+!git clone https://{token}@github.com/<USER>/<REPO>.git
+%cd <REPO>
+!pip install -r requirements.txt
+```
 
-- `import astrology` が成功
-- ephemeris path が解決される
-- natal レポートが生成される
+## Ephemeris
+デフォルトでは以下を順番に探索:
+- `ASTROLOGY_EPHE_PATH`
+- `data/ephemeris/`
+- `ephemeris/`
+- `data/ephe/`
+- `ephe/`
+
+## API 方針
+最低限以下のエンドポイントを推奨:
+- `POST /api/report/natal`
+- `POST /api/report/progressed`
+- `POST /api/report/transit`
+- `POST /api/report/triple`
+- `POST /api/report/synastry`
+
+## Web UI 方針
+1ページで:
+- chart mode 選択
+- 1人分 / 2人分入力
+- 結果表示
+- txt 保存ダウンロード
+
+## 実装優先順位
+1. ephemeris 自動検出
+2. FastAPI 起動
+3. natal レポート
+4. synastry レポート
+5. progressed / transit / triple
+6. 出力品質強化

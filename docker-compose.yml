@@ -1,9 +1,12 @@
+version: "3.9"
+
 services:
-  web:
+  astrology-web:
     build: .
+    container_name: astrology-web
     ports:
       - "8000:8000"
     env_file:
       - .env
     volumes:
-      - ./data:/app/data
+      - ./:/app
