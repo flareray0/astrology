@@ -6,3 +6,6 @@ uvicorn[standard]
 jinja2
 python-multipart
 python-dotenv
+httpx
+pytest
+pydantic-settings

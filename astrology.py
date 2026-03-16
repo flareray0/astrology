@@ -1,3 +1,5 @@
+import argparse
+import logging
 import os
 import swisseph as swe
 from datetime import datetime
@@ -5,6 +7,8 @@ from itertools import combinations
 from pathlib import Path
 
 from aspect_engine import interpret_aspect
+
+logger = logging.getLogger(__name__)
 
 # =======================
 # 0. 入力設定ブロック（差分追加）
@@ -175,21 +179,25 @@ def _discover_dynamic_ephemeris_candidates(base_dir: Path) -> list[Path]:
 
 def _build_ephemeris_candidates() -> list[Path]:
     module_dir = Path(__file__).resolve().parent
-    repo_root = module_dir
     cwd = Path.cwd()
 
     candidates = [
-        repo_root / "ephe",
-        repo_root / "ephemeris",
-        repo_root / "data" / "ephe",
-        repo_root / "data" / "ephemeris",
-        repo_root,
-        cwd / "ephe",
-        cwd / "ephemeris",
+        module_dir / "data" / "ephemeris",
+        module_dir / "ephemeris",
+        module_dir / "data" / "ephe",
+        module_dir / "ephe",
     ]
 
-    candidates.extend(_discover_dynamic_ephemeris_candidates(repo_root))
-    if cwd != repo_root:
+    if cwd != module_dir:
+        candidates.extend([
+            cwd / "data" / "ephemeris",
+            cwd / "ephemeris",
+            cwd / "data" / "ephe",
+            cwd / "ephe",
+        ])
+
+    candidates.extend(_discover_dynamic_ephemeris_candidates(module_dir))
+    if cwd != module_dir:
         candidates.extend(_discover_dynamic_ephemeris_candidates(cwd))
 
     unique_candidates: list[Path] = []
@@ -201,7 +209,7 @@ def _build_ephemeris_candidates() -> list[Path]:
 
 
 def resolve_ephemeris_path(ephe_path: str | None = None) -> tuple[str, str, list[str]]:
-    """環境変数優先 + リポジトリ相対候補から ephemeris パスを解決する。"""
+    """環境変数優先 + 指定順のリポジトリ相対候補から ephemeris パスを解決する。"""
     searched: list[str] = []
 
     if ephe_path:
@@ -228,6 +236,7 @@ def resolve_ephemeris_path(ephe_path: str | None = None) -> tuple[str, str, list
     searched_lines = "\n - " + "\n - ".join(searched)
     raise FileNotFoundError(
         "[EPHE] Swiss Ephemeris ファイルが見つかりません。"
+        f"\n探索順: {EPHEMERIS_ENV_VAR} -> data/ephemeris -> ephemeris -> data/ephe -> ephe"
         f"\n環境変数 {EPHEMERIS_ENV_VAR} で明示指定するか、次の候補に配置してください:{searched_lines}"
     )
 
@@ -236,9 +245,9 @@ def configure_ephemeris(ephe_path: str | None = None) -> str:
     """Swiss Ephemeris の参照先を設定し、実際に使うパスを返す。"""
     resolved, resolved_from, _ = resolve_ephemeris_path(ephe_path)
     os.environ[EPHEMERIS_ENV_VAR] = resolved
-    swe.set_ephe_path(resolved)
-    print(f"[EPHE] using: {resolved}")
-    print(f"[EPHE] resolved from: {resolved_from}")
+    swe.set_ephe_path(Path(resolved).as_posix())
+    logger.info("[EPHE] using: %s", resolved)
+    logger.info("[EPHE] resolved from: %s", resolved_from)
     return resolved
 
 
@@ -248,7 +257,7 @@ def configure_ephemeris_path(ephe_path: str | None = None) -> str:
         try:
             return configure_ephemeris(ephe_path)
         except FileNotFoundError:
-            print(f"[EPHE] fallback to auto-discovery because invalid explicit path: {ephe_path}")
+            logger.warning("[EPHE] fallback to auto-discovery because invalid explicit path: %s", ephe_path)
     return configure_ephemeris(None)
 
 
@@ -358,6 +367,8 @@ def calculate_astrology_data(julian_day, lat, lon, hsys='P', include_asteroids=T
     指定された日時、緯度、経度に基づいて天体の位置を計算します。
     逆行情報も含めます。
     """
+    configure_ephemeris(os.getenv(EPHEMERIS_ENV_VAR) or None)
+
     # 使用する惑星リストを作成
     planets = list(PLANETS.keys())
     if include_asteroids:
@@ -372,7 +383,7 @@ def calculate_astrology_data(julian_day, lat, lon, hsys='P', include_asteroids=T
         # インデックスを1から始めたいので先頭にダミーを追加
         cusps = [0.0] + list(cusps)
     except Exception as e:
-        print(f"ハウス計算中にエラーが発生しました: {e}")
+        logger.error("ハウス計算中にエラーが発生しました: %s", e)
         return [], []
 
     ascendant = ascmc[0]
@@ -443,7 +454,7 @@ def calculate_astrology_data(julian_day, lat, lon, hsys='P', include_asteroids=T
                 'retrograde': retrograde
             })
         except Exception as e:
-            print(f"惑星 {planet_name} の処理中にエラーが発生しました: {e}")
+            logger.warning("惑星 %s の処理中にエラーが発生しました: %s", planet_name, e)
             continue
 
     # バーテクスを追加
@@ -459,7 +470,7 @@ def calculate_astrology_data(julian_day, lat, lon, hsys='P', include_asteroids=T
             'retrograde': False
         })
     except Exception as e:
-        print(f"バーテクスの計算中にエラーが発生しました: {e}")
+        logger.warning("バーテクスの計算中にエラーが発生しました: %s", e)
 
     # パート・オブ・フォーチュン
     if sun_lon is not None and moon_lon is not None and ascendant is not None:
@@ -502,7 +513,7 @@ def calculate_astrology_data(julian_day, lat, lon, hsys='P', include_asteroids=T
                 'retrograde': False
             })
         except Exception as e:
-            print(f"特別なポイント {name} の処理中にエラーが発生しました: {e}")
+            logger.warning("特別なポイント %s の処理中にエラーが発生しました: %s", name, e)
             continue
 
     return astrology_data, cusps
@@ -1652,6 +1663,72 @@ def synthesize_aspect(asp: dict, used_hints: set[str] | None = None, mode: str =
     )
 
 
+def interpret_planet_position(placement: dict) -> dict[str, str]:
+    """単一配置をUIやAPIで再利用しやすい4層構造へ整形する。"""
+    psych = translate_psychology(
+        placement.get("planet", ""),
+        placement.get("sign", ""),
+        int(placement.get("house", 0) or 0),
+    )
+    actions = suggest_actions_for_placement(placement, limit=2)
+    placement_summary = synthesize_planet_sign_house(placement)
+    return {
+        "title": f"{placement.get('planet', '')} in {placement.get('sign', '')} house {placement.get('house', '')}",
+        "placement_meaning": placement_summary,
+        "psychological_pattern": " / ".join(psych["psychological_traits"][:3]),
+        "life_manifestation": " / ".join(psych["life_events"][:3]),
+        "practical_advice": " / ".join(actions) if actions else "日々の反応を観察し、再現しやすい行動パターンを残してください。",
+    }
+
+
+def interpret_house_overlay(base_chart: list[dict], overlay_chart: list[dict], base_cusps: list[float] | None = None) -> list[dict[str, str]]:
+    """相手天体がベースチャートのどのハウスに入るかを簡潔に解釈する。"""
+    if not base_cusps:
+        return []
+    overlay_lines = _syn_house_overlay(base_chart, base_cusps, overlay_chart)
+    results: list[dict[str, str]] = []
+    for line in overlay_lines:
+        body = line.lstrip("- ").strip()
+        results.append({
+            "title": "House Overlay",
+            "placement_meaning": body,
+            "psychological_pattern": "関係の中で反応しやすい領域が強調されます。",
+            "life_manifestation": "同居感覚、対人期待、深い結びつき、社会的目標に影響しやすい配置です。",
+            "practical_advice": "強く反応するテーマほど、期待を言語化して境界線を先に共有してください。",
+        })
+    return results
+
+
+def synthesize_interpretation(
+    placements: list[dict[str, str]],
+    aspects: list[dict[str, str]],
+    overlays: list[dict[str, str]] | None = None,
+    mode: str = "natal",
+) -> str:
+    """配置・アスペクト・オーバーレイを一つの可読レポートに統合する。"""
+    lines = [f"Interpretation synthesis ({mode})"]
+    if placements:
+        lines.append("\nPlacements")
+        for item in placements[:5]:
+            lines.append(f"- {item['placement_meaning']}")
+            lines.append(f"  Psychological pattern: {item['psychological_pattern']}")
+            lines.append(f"  Manifestation: {item['life_manifestation']}")
+            lines.append(f"  Advice: {item['practical_advice']}")
+    if aspects:
+        lines.append("\nAspects")
+        for item in aspects[:5]:
+            lines.append(f"- {item['identity']}")
+            lines.append(f"  Psychological theme: {item['psychological_dynamic']}")
+            lines.append(f"  Manifestation: {item['life_manifestation']}")
+            lines.append(f"  Advice: {item['practical_guidance']}")
+    if overlays:
+        lines.append("\nHouse overlays")
+        for item in overlays[:4]:
+            lines.append(f"- {item['placement_meaning']}")
+            lines.append(f"  Advice: {item['practical_advice']}")
+    return "\n".join(lines)
+
+
 
 def _aspect_priority_score(asp: dict) -> tuple:
     majors = {"太陽", "月", "水星", "金星", "火星", "木星", "土星"}
@@ -2312,7 +2389,7 @@ def _resolve_output_dir() -> Path:
     if output_dir:
         path = Path(output_dir).expanduser().resolve()
     else:
-        path = Path(__file__).resolve().parent
+        path = Path(__file__).resolve().parent / "data" / "results"
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -2340,30 +2417,46 @@ def run_natal_report(target: dict, *, person_name: str = "あなた", include_mi
     chart = target["chart"]
     aspects = calculate_aspects(chart, chart, include_minor_aspects=include_minor_aspects)
     composites = calculate_composite_aspects(chart, COMPOSITE_ASPECTS) if include_composite_aspects else []
+    placement_interpretations = [interpret_planet_position(p) for p in chart if p.get("planet") in MAIN_INTERPRET_PLANETS]
     interp = generate_natal_interpretation(
         chart,
         [(aspects, "ネイタル")],
         [(composites, "複合")],
         person_name=person_name,
     )
-    files = _save_report_files(interp, interp)
-    return {"chart": chart, "aspects": aspects, "composites": composites, "interpretation": interp, **files}
+    result_text = synthesize_interpretation(
+        placements=placement_interpretations,
+        aspects=[interpret_aspect(a, mode="natal") for a in aspects[:8]],
+        mode="natal",
+    )
+    files = _save_report_files(result_text, interp)
+    return {"chart": chart, "aspects": aspects, "composites": composites, "interpretation": interp, "result_text": result_text, **files}
 
 
 def run_progressed_report(natal: dict, progressed: dict, *, person_name: str = "あなた", include_minor_aspects: bool = True) -> dict:
     aspects = calculate_aspects(natal["chart"], progressed["chart"], include_minor_aspects=include_minor_aspects)
     ctx = _header_meta_for_target("progressed", progressed)
     interp = generate_progressed_interpretation(progressed["chart"], [(aspects, "ネイタル×プログレス")], [], person_name=person_name)
-    files = _save_report_files(str(aspects), interp)
-    return {"chart": progressed["chart"], "aspects": aspects, "composites": [], "interpretation": interp, "context": ctx, **files}
+    result_text = synthesize_interpretation(
+        placements=[interpret_planet_position(p) for p in progressed["chart"] if p.get("planet") in MAIN_INTERPRET_PLANETS],
+        aspects=[interpret_aspect(a, mode="progressed") for a in aspects[:8]],
+        mode="progressed",
+    )
+    files = _save_report_files(result_text, interp)
+    return {"chart": progressed["chart"], "aspects": aspects, "composites": [], "interpretation": interp, "result_text": result_text, "context": ctx, **files}
 
 
 def run_transit_report(natal: dict, transit: dict, *, person_name: str = "あなた", include_minor_aspects: bool = True) -> dict:
     aspects = calculate_aspects(natal["chart"], transit["chart"], include_minor_aspects=include_minor_aspects)
     ctx = _header_meta_for_target("transit", transit)
     interp = generate_transit_interpretation(transit["chart"], [(aspects, "ネイタル×トランジット")], [], person_name=person_name)
-    files = _save_report_files(str(aspects), interp)
-    return {"chart": transit["chart"], "aspects": aspects, "composites": [], "interpretation": interp, "context": ctx, **files}
+    result_text = synthesize_interpretation(
+        placements=[interpret_planet_position(p) for p in transit["chart"] if p.get("planet") in MAIN_INTERPRET_PLANETS],
+        aspects=[interpret_aspect(a, mode="transit") for a in aspects[:8]],
+        mode="transit",
+    )
+    files = _save_report_files(result_text, interp)
+    return {"chart": transit["chart"], "aspects": aspects, "composites": [], "interpretation": interp, "result_text": result_text, "context": ctx, **files}
 
 
 def run_triple_report(natal: dict, progressed: dict, transit: dict, *, person_name: str = "あなた", include_minor_aspects: bool = True) -> dict:
@@ -2379,8 +2472,14 @@ def run_triple_report(natal: dict, progressed: dict, transit: dict, *, person_na
         aspect_sets=aspects,
         person_name=person_name,
     )
-    files = _save_report_files(str(aspects), interp)
-    return {"chart": natal["chart"], "aspects": aspects, "composites": [], "interpretation": interp, **files}
+    flat_aspects = [aspect for aspect_set, _label in aspects for aspect in aspect_set]
+    result_text = synthesize_interpretation(
+        placements=[interpret_planet_position(p) for p in natal["chart"] if p.get("planet") in MAIN_INTERPRET_PLANETS],
+        aspects=[interpret_aspect(a, mode="triple") for a in flat_aspects[:8]],
+        mode="triple",
+    )
+    files = _save_report_files(result_text, interp)
+    return {"chart": natal["chart"], "aspects": aspects, "composites": [], "interpretation": interp, "result_text": result_text, **files}
 
 
 def run_synastry_report(person1: dict, person2: dict, *, person1_name: str = "あなた", person2_name: str = "相手", include_minor_aspects: bool = True) -> dict:
@@ -2393,8 +2492,15 @@ def run_synastry_report(person1: dict, person2: dict, *, person1_name: str = "�
         person2_name=person2_name,
         person1_cusps=person1.get("cusps"),
     )
-    files = _save_report_files(str(syn), interp)
-    return {"chart": person1["chart"], "aspects": syn, "composites": [], "interpretation": interp, **files}
+    overlay_interpretations = interpret_house_overlay(person1["chart"], person2["chart"], person1.get("cusps"))
+    result_text = synthesize_interpretation(
+        placements=[interpret_planet_position(p) for p in person1["chart"] if p.get("planet") in MAIN_INTERPRET_PLANETS],
+        aspects=[interpret_aspect(a, mode="synastry") for a in syn[:8]],
+        overlays=overlay_interpretations,
+        mode="synastry",
+    )
+    files = _save_report_files(result_text, interp)
+    return {"chart": person1["chart"], "aspects": syn, "composites": [], "interpretation": interp, "result_text": result_text, **files}
 
 def run_report_by_mode(
     chart_mode: str,
@@ -2450,61 +2556,144 @@ def _build_chart_data_from_config(date_tuple, time_str, tz_offset, lat, lon):
     jd = swe.julday(date_tuple[0], date_tuple[1], date_tuple[2], ut)
     return {'julian_day': jd, 'lat': lat, 'lon': lon}
 
+
+def _prompt_with_default(prompt: str, default: str) -> str:
+    entered = input(f"{prompt} [{default}]: ").strip()
+    return entered or default
+
+
+def _cli_defaults() -> dict:
+    return {
+        "chart_mode": chart_mode,
+        "person_name": PERSON_NAME,
+        "date": f"{NATAL_DATE[0]:04d}-{NATAL_DATE[1]:02d}-{NATAL_DATE[2]:02d}",
+        "time": NATAL_TIME,
+        "timezone": str(NATAL_TZ),
+        "lat": str(NATAL_LAT),
+        "lon": str(NATAL_LON),
+        "progressed_date": f"{PROGRESS_DATE[0]:04d}-{PROGRESS_DATE[1]:02d}-{PROGRESS_DATE[2]:02d}",
+        "progressed_time": PROGRESS_TIME,
+        "transit_date": f"{TRANSIT_DATE[0]:04d}-{TRANSIT_DATE[1]:02d}-{TRANSIT_DATE[2]:02d}",
+        "transit_time": TRANSIT_TIME,
+        "person2_date": f"{PERSON2_DATE[0]:04d}-{PERSON2_DATE[1]:02d}-{PERSON2_DATE[2]:02d}",
+        "person2_time": PERSON2_TIME,
+        "person2_timezone": str(PERSON2_TZ),
+        "person2_lat": str(PERSON2_LAT),
+        "person2_lon": str(PERSON2_LON),
+        "person2_name": "相手",
+    }
+
+
+def _parse_date_string(value: str) -> tuple[int, int, int]:
+    dt = datetime.strptime(value, "%Y-%m-%d")
+    return dt.year, dt.month, dt.day
+
+
+def _chart_from_cli_values(date_value: str, time_value: str, timezone_value: str, lat_value: str, lon_value: str) -> dict:
+    return build_chart_from_input(
+        _parse_date_string(date_value),
+        time_value,
+        float(timezone_value),
+        float(lat_value),
+        float(lon_value),
+        hsys=hsys,
+        include_asteroids=include_asteroids,
+    )
+
+
+def _collect_cli_inputs() -> dict:
+    defaults = _cli_defaults()
+    mode = _prompt_with_default("chart mode (natal/progressed/transit/triple/synastry)", defaults["chart_mode"])
+    payload = {
+        "chart_mode": mode,
+        "person_name": _prompt_with_default("person name", defaults["person_name"]),
+        "date": _prompt_with_default("birth date YYYY-MM-DD", defaults["date"]),
+        "time": _prompt_with_default("birth time HH:MM", defaults["time"]),
+        "timezone": _prompt_with_default("timezone offset", defaults["timezone"]),
+        "lat": _prompt_with_default("latitude", defaults["lat"]),
+        "lon": _prompt_with_default("longitude", defaults["lon"]),
+        "person2_name": defaults["person2_name"],
+    }
+    if mode in {"progressed", "triple"}:
+        payload["progressed_date"] = _prompt_with_default("progressed date YYYY-MM-DD", defaults["progressed_date"])
+        payload["progressed_time"] = _prompt_with_default("progressed time HH:MM", defaults["progressed_time"])
+    if mode in {"transit", "triple"}:
+        payload["transit_date"] = _prompt_with_default("transit date YYYY-MM-DD", defaults["transit_date"])
+        payload["transit_time"] = _prompt_with_default("transit time HH:MM", defaults["transit_time"])
+    if mode == "synastry":
+        payload["person2_name"] = _prompt_with_default("second person name", defaults["person2_name"])
+        payload["person2_date"] = _prompt_with_default("second person date YYYY-MM-DD", defaults["person2_date"])
+        payload["person2_time"] = _prompt_with_default("second person time HH:MM", defaults["person2_time"])
+        payload["person2_timezone"] = _prompt_with_default("second person timezone offset", defaults["person2_timezone"])
+        payload["person2_lat"] = _prompt_with_default("second person latitude", defaults["person2_lat"])
+        payload["person2_lon"] = _prompt_with_default("second person longitude", defaults["person2_lon"])
+    return payload
+
+
+def _run_cli_report(cli_values: dict) -> dict:
+    natal = _chart_from_cli_values(
+        cli_values["date"],
+        cli_values["time"],
+        cli_values["timezone"],
+        cli_values["lat"],
+        cli_values["lon"],
+    )
+    progressed = None
+    transit = None
+    person2 = None
+    mode = LEGACY_MODE_ALIASES.get(cli_values["chart_mode"], cli_values["chart_mode"])
+    if mode in {"progressed", "triple"}:
+        progressed = _chart_from_cli_values(
+            cli_values["progressed_date"],
+            cli_values["progressed_time"],
+            cli_values["timezone"],
+            cli_values["lat"],
+            cli_values["lon"],
+        )
+    if mode in {"transit", "triple"}:
+        transit = _chart_from_cli_values(
+            cli_values["transit_date"],
+            cli_values["transit_time"],
+            cli_values["timezone"],
+            cli_values["lat"],
+            cli_values["lon"],
+        )
+    if mode == "synastry":
+        person2 = _chart_from_cli_values(
+            cli_values["person2_date"],
+            cli_values["person2_time"],
+            cli_values["person2_timezone"],
+            cli_values["person2_lat"],
+            cli_values["person2_lon"],
+        )
+    return run_report_by_mode(
+        mode,
+        natal=natal,
+        progressed=progressed,
+        transit=transit,
+        person2=person2,
+        person_name=cli_values["person_name"],
+        person2_name=cli_values.get("person2_name", "相手"),
+        include_minor_aspects=include_minor_aspects,
+        include_composite_aspects=include_composite_aspects,
+    )
+
+
+def main() -> None:
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
+    parser = argparse.ArgumentParser(description="Local astrology report generator")
+    parser.add_argument("--non-interactive", action="store_true", help="Use repository defaults without prompts")
+    args = parser.parse_args()
+
+    cli_values = _cli_defaults() if args.non_interactive else _collect_cli_inputs()
+    result = _run_cli_report(cli_values)
+    print(result["interpretation"])
+    print(f"[SAVE] result summary: {result['result_path']}")
+    print(f"[SAVE] interpretation: {result['interpretation_path']}")
+
 # =======================
 # 3. 使用例セクション
 # =======================
 
 if __name__ == "__main__":
-    mode = LEGACY_MODE_ALIASES.get(chart_mode, chart_mode)
-    if mode not in CHART_TYPE_LABELS:
-        raise ValueError(f"無効な chart_mode です: {chart_mode}")
-
-    natal_data = _build_chart_data_from_config(NATAL_DATE, NATAL_TIME, NATAL_TZ, NATAL_LAT, NATAL_LON)
-    progress_data = _build_chart_data_from_config(PROGRESS_DATE, PROGRESS_TIME, PROGRESS_TZ, PROGRESS_LAT, PROGRESS_LON)
-    transit_data = _build_chart_data_from_config(TRANSIT_DATE, TRANSIT_TIME, TRANSIT_TZ, TRANSIT_LAT, TRANSIT_LON)
-    person2_data = _build_chart_data_from_config(PERSON2_DATE, PERSON2_TIME, PERSON2_TZ, PERSON2_LAT, PERSON2_LON)
-
-    natal_chart, natal_cusps = calculate_astrology_data(natal_data['julian_day'], natal_data['lat'], natal_data['lon'], hsys=hsys, include_asteroids=include_asteroids)
-    progress_chart, _ = calculate_astrology_data(progress_data['julian_day'], progress_data['lat'], progress_data['lon'], hsys=hsys, include_asteroids=include_asteroids)
-    transit_chart, _ = calculate_astrology_data(transit_data['julian_day'], transit_data['lat'], transit_data['lon'], hsys=hsys, include_asteroids=include_asteroids)
-    person2_chart, _ = calculate_astrology_data(person2_data['julian_day'], person2_data['lat'], person2_data['lon'], hsys=hsys, include_asteroids=include_asteroids)
-
-    if mode == 'natal':
-        aspects = calculate_aspects(natal_chart, natal_chart, include_minor_aspects=include_minor_aspects)
-        composites = calculate_composite_aspects(natal_chart, COMPOSITE_ASPECTS) if include_composite_aspects else []
-        interp_text = generate_interpretation(natal_chart, [(aspects, 'ネイタル')], [(composites, '複合')], person_name=PERSON_NAME, chart_mode='natal')
-    elif mode == 'progressed':
-        aspects = calculate_aspects(natal_chart, progress_chart, include_minor_aspects=include_minor_aspects)
-        interp_text = generate_interpretation(progress_chart, [(aspects, 'ネイタル×プログレス')], [], person_name=PERSON_NAME, chart_mode='progressed')
-    elif mode == 'transit':
-        aspects = calculate_aspects(natal_chart, transit_chart, include_minor_aspects=include_minor_aspects)
-        interp_text = generate_interpretation(transit_chart, [(aspects, 'ネイタル×トランジット')], [], person_name=PERSON_NAME, chart_mode='transit')
-    elif mode == 'triple':
-        aspects = [
-            (calculate_aspects(natal_chart, natal_chart, include_minor_aspects=include_minor_aspects), 'ネイタル内'),
-            (calculate_aspects(natal_chart, progress_chart, include_minor_aspects=include_minor_aspects), 'ネイタル×プログレス'),
-            (calculate_aspects(natal_chart, transit_chart, include_minor_aspects=include_minor_aspects), 'ネイタル×トランジット'),
-        ]
-        interp_text = generate_interpretation(
-            natal_chart,
-            aspects,
-            [],
-            person_name=PERSON_NAME,
-            chart_mode='triple',
-            context={'natal_chart': natal_chart, 'progress_chart': progress_chart, 'transit_chart': transit_chart},
-        )
-    else:
-        syn = calculate_aspects(natal_chart, person2_chart, include_minor_aspects=include_minor_aspects)
-        interp_text = generate_interpretation(
-            natal_chart,
-            [(syn, 'シナストリー')],
-            [],
-            person_name=PERSON_NAME,
-            chart_mode='synastry',
-            context={'person1_chart': natal_chart, 'person2_chart': person2_chart, 'synastry_aspects': syn, 'person2_name': '相手', 'person1_cusps': natal_cusps},
-        )
-
-    print(interp_text)
-    with open('astrology_interpretation.txt', 'w', encoding='utf-8') as f:
-        f.write(interp_text)
-    print('[SAVE] 解釈レポートを保存しました: astrology_interpretation.txt')
+    main()
