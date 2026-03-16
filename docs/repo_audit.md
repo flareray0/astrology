@@ -13,20 +13,38 @@
 - Report generation: `generate_natal_interpretation(...)`, `generate_progressed_interpretation(...)`, `generate_transit_interpretation(...)`, `generate_triple_interpretation(...)`, `generate_synastry_interpretation(...)`, `run_report_by_mode(...)`
 - Aspect meaning layer: `aspect_engine.interpret_aspect(...)`
 
-## Missing or incomplete pieces before implementation
-- `web/app.py` was a stub and did not call the astrology engine.
-- `web/templates/index.html` only supported mode and name, with no birth data fields or synastry input.
-- Mode-specific API endpoints were missing.
-- Output files defaulted to repo root instead of `data/results/`.
-- CLI flow depended on hard-coded constants instead of a usable interactive run path.
-- Interpretation helper functions requested by spec were not exposed with stable names:
-  - `interpret_planet_position()`
-  - `interpret_house_overlay()`
-  - `synthesize_interpretation()`
-- Ephemeris detection existed, but its search order did not match the required order exactly.
+## Missing pieces identified before implementation
+- Needed robust validation for synastry second-person fields in the web request path.
+- Needed consistent API `aspect_count` semantics for `triple` mode (nested aspect sets).
+- Needed a deterministic local test invocation path so imports resolve in this repo layout.
 
-## Implementation direction
-- Keep the existing chart and report engine.
-- Add thin interpretation wrappers rather than replacing the working narrative generator.
-- Make `uvicorn web.app:app --reload` the primary supported run target.
-- Persist both structured summary and narrative interpretation under `data/results/`.
+## Implemented in this pass
+- Added strict synastry input validation in `web/app.py` to fail fast with a clear error for blank second-person date/time.
+- Added `_aspect_count(...)` helper in `web/app.py` so `/api/report/*` returns a true aggregate count for both flat and nested aspect payloads.
+- Added `pytest.ini` with `pythonpath = .` so local test execution works from a clean clone without manual `PYTHONPATH` export.
+
+## 日本語サマリー
+
+### 確認対象ファイル
+- `astrology.py`
+- `AGENT.md`
+- `CODEX_NOTES.md`
+- `web/app.py`
+- `README.md`
+
+### 既存で確認できた主要機能
+- チャート計算: `calculate_astrology_data(...)`, `build_chart_from_input(...)`
+- アスペクト計算: `calculate_aspects(...)`, `calculate_composite_aspects(...)`
+- レポート生成: `generate_natal_interpretation(...)`, `generate_progressed_interpretation(...)`, `generate_transit_interpretation(...)`, `generate_triple_interpretation(...)`, `generate_synastry_interpretation(...)`, `run_report_by_mode(...)`
+- アスペクト解釈層: `aspect_engine.interpret_aspect(...)`
+
+### 実装前に不足していた点
+- Webリクエスト経路でシナストリー第2人物入力の厳密バリデーションが必要。
+- `triple` モードでネストされたアスペクトを正しく数える `aspect_count` が必要。
+- クリーン環境で import 解決できるローカルテスト実行経路が必要。
+
+### このパスで実施した対応
+- `web/app.py` にシナストリー第2人物入力のバリデーションを追加（空の生年月日/時刻を早期にエラー化）。
+- `web/app.py` に `_aspect_count(...)` を追加し、通常/ネスト両方のアスペクト件数を正しく返すよう変更。
+- `pytest.ini` (`pythonpath = .`) を追加し、手動 `PYTHONPATH` 設定なしでローカル実行可能にした。
+

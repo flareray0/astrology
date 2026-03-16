@@ -131,3 +131,49 @@
 - 仮定1: ephemerisファイルはリポジトリ同梱の `./ephemeris` を既定で利用。
 - 仮定2: MVPではユーザー認証なし。
 - 仮定3: 保存はJSONファイルで十分（将来DBへ移行）。
+
+---
+# Vending-style Astrology Site Technical Design (MVP)
+
+## 1. Current state
+- Existing `astrology.py` already uses Swiss Ephemeris (`pyswisseph`).
+- Reusable core functions include chart calculation, aspect calculation, composite aspect detection, and interpretation text generation.
+- Main issue: a script/notebook-oriented structure is harder to reuse from a web API.
+
+## 2. Issues
+- Configuration values are globally scattered.
+- Persistence is text-file oriented without result ID management.
+- Validation was not originally designed for UI/API boundaries.
+- Ephemeris path handling needed local environment support.
+
+## 3. Technical design summary
+- Use `FastAPI` as the entry point.
+- Keep astrology logic in a service layer and reuse existing `astrology.py` functions.
+- Save results as JSON files under `data/results` for MVP; make DB migration easy later.
+- Use lightweight `Jinja2` templates plus frontend JS for form/API flow.
+
+## 4. Backend structure
+- `app/main.py`: startup and exception handling.
+- `app/api/routes.py`: API and page routing.
+- `app/services/astrology_service.py`: integration with astrology core.
+- `app/schemas.py`: request/response models.
+- `app/core/config.py`: environment configuration.
+
+## 5. Core flow
+1. User submits form data.
+2. Frontend posts to `/api/chart/*`.
+3. Service layer calls `astrology.py` functions.
+4. Result is saved with `result_id`.
+5. Result is retrieved by API or rendered page.
+
+## 6. Error handling policy
+- Map domain exception `AstrologyError` to 4xx.
+- Return 500 JSON for unexpected API errors.
+- Use template error page for non-API views.
+- Validate input first via Pydantic.
+
+## 7. Assumptions (MVP)
+- Default ephemeris is repository-local `./ephemeris`.
+- No user authentication in MVP.
+- JSON-file persistence is sufficient until DB migration.
+
