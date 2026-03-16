@@ -86,7 +86,11 @@ def _build_report(
     if chart_mode in {"transit", "triple"}:
         transit = _build_primary_chart(transit_date or birth_date, transit_time or birth_time, timezone, latitude, longitude)
     if chart_mode == "synastry":
-        if None in {person2_birth_date, person2_birth_time, person2_latitude, person2_longitude, person2_timezone}:
+        if (
+            None in {person2_birth_date, person2_birth_time, person2_latitude, person2_longitude, person2_timezone}
+            or not str(person2_birth_date).strip()
+            or not str(person2_birth_time).strip()
+        ):
             raise ValueError("synastry mode requires complete second person input")
         person2 = _build_primary_chart(
             person2_birth_date,
@@ -105,6 +109,13 @@ def _build_report(
         person_name=person_name,
         person2_name=person2_name,
     )
+
+
+def _aspect_count(aspects: list) -> int:
+    """Payload に応じたアスペクト件数を返す（通常/トリプル両対応）。"""
+    if aspects and isinstance(aspects[0], tuple):
+        return sum(len(aspect_set) for aspect_set, _label in aspects)
+    return len(aspects)
 
 
 def _render_page(request: Request, form_values: dict, report_payload: dict | None = None, error_message: str | None = None) -> HTMLResponse:
@@ -188,7 +199,7 @@ async def _api_report(mode: str, **kwargs) -> JSONResponse:
                 "result_text": payload.get("result_text", ""),
                 "result_path": payload.get("result_path"),
                 "interpretation_path": payload.get("interpretation_path"),
-                "aspect_count": len(payload.get("aspects", [])),
+                "aspect_count": _aspect_count(payload.get("aspects", [])),
             }
         )
     except Exception as exc:
