@@ -15,6 +15,8 @@ import astrology
 
 class AstrologyService:
     def __init__(self) -> None:
+        os.environ["USE_USCS_PHASE"] = "1" if settings.use_uscs_phase else "0"
+        os.environ["USCS_VERBOSE"] = "1" if settings.uscs_verbose else "0"
         configured_path = astrology.configure_ephemeris(settings.astrology_ephe_path or None)
         os.environ["ASTROLOGY_EPHE_PATH"] = configured_path
 

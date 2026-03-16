@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     astrology_house_system: str = "K"
     include_asteroids: bool = True
     include_minor_aspects: bool = True
+    use_uscs_phase: bool = True
+    uscs_verbose: bool = False
 
     data_dir: Path = Path("data")
     results_dir: Path = Path("data/results")
