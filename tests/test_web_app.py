@@ -34,7 +34,8 @@ def test_natal_api_report_returns_text_and_paths():
     assert payload["mode_label"] == "ネイタルチャート（出生図）"
     assert "太陽" in payload["interpretation"]
     assert "【出生傾向の要点サマリー】" in payload["result_text"]
-    assert "対象モード: ネイタルチャート（出生図）" in payload["result_text"]
+    assert "今回の読み方: ネイタルチャート（出生図）" in payload["result_text"]
+    assert "ひとこと: むずかしく考えなくて大丈夫です。" in payload["result_text"]
     assert "Interpretation synthesis" not in payload["result_text"]
     assert "以下の圧縮データだけを根拠に、日本語で読み解いてください。" in payload["llm_prompt_text"]
     assert payload["compact_data"]["対象モード"] == "ネイタルチャート（出生図）"
@@ -67,5 +68,5 @@ def test_synastry_api_report_returns_relationship_text():
     assert payload["mode_label"] == "シナストリー（相性）"
     assert "相性レポート" in payload["interpretation"]
     assert "【相性の要点サマリー】" in payload["result_text"]
-    assert "対象モード: シナストリー（相性）" in payload["result_text"]
+    assert "今回の読み方: シナストリー（相性）" in payload["result_text"]
     assert payload["compact_data"]["対象者"] == "A × B"

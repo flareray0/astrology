@@ -38,11 +38,16 @@ def test_report_modes_include_consistent_quality_sections(mode: str, expected_ma
         person2_name="Partner",
     )
     interpretation = payload["interpretation"]
+    result_text = payload["result_text"]
+    assert "【まずひとこと】" in interpretation
     assert "【最初に押さえたい要点】" in interpretation
     assert "【実践ガイド】" in interpretation
     assert "【読み方メモ】" in interpretation
+    assert "むずかしく考えなくて大丈夫" in interpretation or "全部を同時に理解しなくて大丈夫" in interpretation or "今の自分の変化をやさしく確認" in interpretation or "時期運は怖がるためではなく" in interpretation or "相性は合う合わないを決めつけるためではなく" in interpretation
     assert expected_marker in interpretation
     assert "※この" in interpretation
+    assert "【星どうしの大事な関係】" in result_text
+    assert "やってみるコツ:" in result_text
 
 
 def test_progressed_report_keeps_existing_section_and_new_focus_summary() -> None:
@@ -56,3 +61,18 @@ def test_progressed_report_keeps_existing_section_and_new_focus_summary() -> Non
     interpretation = payload["interpretation"]
     assert "内面変化の軸" in interpretation
     assert "【この時期の活かし方】" in interpretation
+
+
+def test_natal_aspect_text_is_shorter_and_more_gentle() -> None:
+    charts = _build_sample_payloads()
+    payload = run_report_by_mode(
+        chart_mode="natal",
+        natal=charts["natal"],
+        person_name="Test",
+    )
+
+    interpretation = payload["interpretation"]
+    assert "生活現象:" not in interpretation
+    assert "強度と時期:" not in interpretation
+    assert "ハウス連動:" not in interpretation
+    assert "やってみるコツ:" in interpretation

@@ -2,7 +2,9 @@ import argparse
 import json
 import logging
 import os
+import re
 import swisseph as swe
+import unicodedata
 from datetime import datetime
 from itertools import combinations
 from pathlib import Path
@@ -1806,18 +1808,17 @@ def synthesize_aspect(asp: dict, used_hints: set[str] | None = None, mode: str =
     enriched = interpret_aspect(asp, mode=mode)
     action = suggest_actions_for_aspect(asp, used_hints=used_hints)
     guidance = action[0] if action else enriched["practical_guidance"]
-    life_events = " / ".join(enriched["life_events"])
+    theme = _first_sentence(enriched["psychological_dynamic"], "大事なテーマが動きやすい配置です")
+    event_examples = _life_event_examples(enriched.get("life_events"))
 
-    return (
-        f"{enriched['identity']}。"
-        f"{enriched['opener']}{enriched['psychological_dynamic']}。"
-        f"生活現象: {enriched['life_manifestation']}。"
-        f"強度と時期: {enriched['timing_or_intensity']}。"
-        f"サイン連動: {enriched['sign_interaction']}。"
-        f"ハウス連動: {enriched['house_interaction']}。"
-        f"起こりやすい場面: {life_events}。"
-        f"実践ガイド: {guidance}。"
-    )
+    parts = [
+        _ensure_sentence(enriched["identity"]),
+        _ensure_sentence(theme),
+    ]
+    if event_examples:
+        parts.append(event_examples)
+    parts.append(_ensure_sentence(f"やってみるコツ: {guidance}"))
+    return " ".join(part for part in parts if part)
 
 
 def interpret_planet_position(placement: dict) -> dict[str, str]:
@@ -1868,35 +1869,35 @@ def synthesize_interpretation(
     guidance = STRUCTURED_SUMMARY_GUIDANCE.get(mode, "詳細レポートを読む前に、重要ポイントだけ先に把握するための整理版です。")
     lines = [
         f"【{summary_label}】",
-        f"対象モード: {mode_label}",
-        f"使いどころ: {guidance}",
-        "位置づけ: 『詳細レポート』が文章でじっくり読む版で、こちらは要点だけを素早く確認する版です。",
+        f"今回の読み方: {mode_label}",
+        f"こんなときに役立ちます: {guidance}",
+        "ひとこと: むずかしく考えなくて大丈夫です。まずは『自分に当てはまりそうな流れ』だけ拾えれば十分です。",
         "=" * 60,
     ]
     if placements:
-        lines.append("\n【主要な配置】")
+        lines.append("\n【大事な星の配置】")
         for item in placements[:5]:
             lines.append(f"- {item['placement_meaning']}")
-            lines.append(f"  心理傾向: {item['psychological_pattern']}")
-            lines.append(f"  出やすい形: {item['life_manifestation']}")
-            lines.append(f"  活かし方: {item['practical_advice']}")
+            lines.append(f"  気持ちのくせ: {item['psychological_pattern']}")
+            lines.append(f"  日常で出やすい形: {item['life_manifestation']}")
+            lines.append(f"  やってみるコツ: {item['practical_advice']}")
     if aspects:
-        lines.append("\n【主要なアスペクト】")
+        lines.append("\n【星どうしの大事な関係】")
         for item in aspects[:5]:
             lines.append(f"- {item['identity']}")
-            lines.append(f"  心理テーマ: {item['psychological_dynamic']}")
-            lines.append(f"  出やすい形: {item['life_manifestation']}")
-            lines.append(f"  実践ヒント: {item['practical_guidance']}")
+            lines.append(f"  気持ちの動き: {item['psychological_dynamic']}")
+            lines.append(f"  日常で出やすい形: {item['life_manifestation']}")
+            lines.append(f"  やってみるコツ: {item['practical_guidance']}")
     if overlays:
         lines.append("\n【関係の重なり方】")
         for item in overlays[:4]:
             lines.append(f"- {item['placement_meaning']}")
-            lines.append(f"  実践ヒント: {item['practical_advice']}")
+            lines.append(f"  やってみるコツ: {item['practical_advice']}")
     lines.extend(
         [
             "\n【この要点サマリーの読み方】",
-            "- まず『対象モード』と『主要な配置』で土台を確認します。",
-            "- 次に『主要なアスペクト』で、今強く動きやすいテーマを拾います。",
+            "- まず『今回の読み方』と『大事な星の配置』で土台を確認します。",
+            "- 次に『星どうしの大事な関係』で、今動きやすいテーマを拾います。",
             "- 迷ったときは、詳細レポートに戻って背景説明を読み足す使い方がおすすめです。",
         ]
     )
@@ -2033,6 +2034,54 @@ REPORT_READING_NOTES = {
     ],
 }
 
+GENTLE_REPORT_OPENERS = {
+    "natal": [
+        "むずかしく考えなくて大丈夫です。これは『良い悪いの判定』より、『どんな場面で力が出やすいか』を見るための読み物です。",
+        "まずは全部を覚えなくて大丈夫で、いちばん気になる1行だけ拾えれば十分です。",
+    ],
+    "progressed": [
+        "今の自分の変化をやさしく確認する読み物として受け取れば十分です。",
+        "当たり外れより、『最近しっくり来ること・来ないこと』を照らし合わせる読み方がおすすめです。",
+    ],
+    "transit": [
+        "時期運は怖がるためではなく、今の空気に合う動き方を見つけるためのヒントです。",
+        "全部を深読みしなくても、『今はここを整えると楽』という箇所だけ拾えば十分です。",
+    ],
+    "triple": [
+        "情報量は多いですが、全部を同時に理解しなくて大丈夫です。",
+        "まずは『今いちばん大事なテーマがどれか』だけ掴む読み方で十分です。",
+    ],
+    "synastry": [
+        "相性は合う合わないを決めつけるためではなく、二人が楽に付き合うコツを探すための読み物です。",
+        "まずは『安心しやすい点』と『すれ違いやすい点』だけ見れば十分です。",
+    ],
+}
+
+
+def _ensure_sentence(text: str | None) -> str:
+    normalized = str(text or "").strip()
+    if not normalized:
+        return ""
+    return normalized if normalized.endswith("。") else f"{normalized}。"
+
+
+def _first_sentence(text: str | None, fallback: str) -> str:
+    normalized = unicodedata.normalize("NFKC", str(text or ""))
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    if not normalized:
+        return fallback
+    parts = [part.strip() for part in re.split(r"[。!?！？]", normalized) if part.strip()]
+    return parts[0] if parts else fallback
+
+
+def _life_event_examples(events: list[str] | None) -> str | None:
+    selected = [str(item).strip() for item in (events or []) if str(item).strip()][:2]
+    if not selected:
+        return None
+    if len(selected) == 1:
+        return f"日常では『{selected[0]}』の場面に出やすいでしょう。"
+    return f"日常では『{selected[0]}』『{selected[1]}』の場面に出やすいでしょう。"
+
 
 def _is_report_separator(line: str) -> bool:
     stripped = line.strip()
@@ -2070,18 +2119,29 @@ def _apply_report_quality_frame(
     action_lines: list[str] | None = None,
     note_lines: list[str] | None = None,
 ) -> str:
-    if "【最初に押さえたい要点】" in report_text and "【実践ガイド】" in report_text and "【読み方メモ】" in report_text:
+    if (
+        "【まずひとこと】" in report_text
+        and "【最初に押さえたい要点】" in report_text
+        and "【実践ガイド】" in report_text
+        and "【読み方メモ】" in report_text
+    ):
         return report_text
 
     lines = report_text.splitlines()
+    gentle_intro_block = _build_report_section("【まずひとこと】", GENTLE_REPORT_OPENERS.get(mode, []))
     summary_block = _build_report_section("【最初に押さえたい要点】", summary_lines or [])
     action_block = _build_report_section("【実践ガイド】", action_lines or [])
     note_block = _build_report_section("【読み方メモ】", [*(note_lines or []), *REPORT_READING_NOTES.get(mode, [])])
 
+    opening_blocks: list[str] = []
+    if gentle_intro_block:
+        opening_blocks.extend(gentle_intro_block)
     if summary_block:
+        opening_blocks.extend(summary_block)
+    if opening_blocks:
         first_separator = next((idx for idx, line in enumerate(lines) if _is_report_separator(line)), None)
         insert_at = first_separator + 1 if first_separator is not None else 0
-        lines[insert_at:insert_at] = summary_block
+        lines[insert_at:insert_at] = opening_blocks
 
     trailing_blocks: list[str] = []
     for block in (action_block, note_block):
@@ -2500,11 +2560,16 @@ def synthesize_synastry_aspect(asp: dict) -> str:
     pair_templates = SYNASTRY_ASPECT_TEMPLATES.get(pair_key, {})
     lead = pair_templates.get(category, f"{p1}と{p2}は関係運用のテンポ調整を学びやすい組み合わせです。")
     enriched = interpret_aspect(asp, mode="synastry")
-    return (
-        f"{enriched['identity']}。{lead}"
-        f" 心理ダイナミクス: {enriched['psychological_dynamic']}。"
-        f" 生活現象: {enriched['life_manifestation']}。"
-        f" 実践ガイド: {enriched['practical_guidance']}。"
+    theme = _first_sentence(enriched["psychological_dynamic"], "二人の間で大事なテーマが動きやすい配置です")
+    return " ".join(
+        part
+        for part in [
+            _ensure_sentence(enriched["identity"]),
+            _ensure_sentence(lead),
+            _ensure_sentence(f"ひとことで言うと、{theme}"),
+            _ensure_sentence(f"関係を楽にするコツ: {enriched['practical_guidance']}"),
+        ]
+        if part
     )
 
 
