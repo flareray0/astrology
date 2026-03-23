@@ -1903,6 +1903,133 @@ def generate_report_header(
     return lines
 
 
+REPORT_READING_NOTES = {
+    "natal": [
+        "出生図は『変わらない運命』の断定ではなく、強みと偏りの扱い方を確認する地図として使うと実務的です。",
+        "当たり外れより、『どの行動を増やすと安定しやすいか』に重心を置いて読むほど活かしやすくなります。",
+    ],
+    "progressed": [
+        "プログレスは出来事の断定より、内面の重心がどちらへ移っているかを読むと精度が安定します。",
+        "違和感の出た習慣を責めるより、『今の自分に合う運用へ更新するサイン』として扱うと使いやすいです。",
+    ],
+    "transit": [
+        "トランジットは外部刺激の強弱を見るレポートなので、単発の吉凶より時期の使い方に注目すると実務向きです。",
+        "強いヒットがある時ほど、反応の良かった行動を短い周期で記録すると波を味方にしやすくなります。",
+    ],
+    "triple": [
+        "トリプルは『本質・内面変化・外部時期』を同時に読む統合ビューなので、全部を一度に変えるより優先順位を決めるのがコツです。",
+        "転換点に見える時ほど、続けることと減らすことを分けて記録すると判断の質が安定します。",
+    ],
+    "synastry": [
+        "相性レポートは相手の人格を断定するためではなく、二人の運用で摩耗しやすい点と伸びやすい点を把握する材料です。",
+        "良し悪しの判定より、安心を増やす手順と衝突後の回復導線を見つける読み方が実務的です。",
+    ],
+}
+
+
+def _is_report_separator(line: str) -> bool:
+    stripped = line.strip()
+    return bool(stripped) and set(stripped) == {"="}
+
+
+def _normalize_report_bullet(line: str) -> str | None:
+    text = str(line or "").strip()
+    if not text:
+        return None
+    if text.startswith("- "):
+        return text
+    if text.startswith("-"):
+        return f"- {text[1:].strip()}"
+    return f"- {text}"
+
+
+def _build_report_section(title: str, items: list[str]) -> list[str]:
+    normalized: list[str] = []
+    for item in items:
+        bullet = _normalize_report_bullet(item)
+        if bullet:
+            normalized.append(bullet)
+    deduped = dedupe_similar_lines(normalized)
+    if not deduped:
+        return []
+    return ["", title, *deduped]
+
+
+def _apply_report_quality_frame(
+    report_text: str,
+    *,
+    mode: str,
+    summary_lines: list[str] | None = None,
+    action_lines: list[str] | None = None,
+    note_lines: list[str] | None = None,
+) -> str:
+    if "【最初に押さえたい要点】" in report_text and "【実践ガイド】" in report_text and "【読み方メモ】" in report_text:
+        return report_text
+
+    lines = report_text.splitlines()
+    summary_block = _build_report_section("【最初に押さえたい要点】", summary_lines or [])
+    action_block = _build_report_section("【実践ガイド】", action_lines or [])
+    note_block = _build_report_section("【読み方メモ】", [*(note_lines or []), *REPORT_READING_NOTES.get(mode, [])])
+
+    if summary_block:
+        first_separator = next((idx for idx, line in enumerate(lines) if _is_report_separator(line)), None)
+        insert_at = first_separator + 1 if first_separator is not None else 0
+        lines[insert_at:insert_at] = summary_block
+
+    trailing_blocks: list[str] = []
+    for block in (action_block, note_block):
+        if block:
+            trailing_blocks.extend(block)
+    if trailing_blocks:
+        separator_indices = [idx for idx, line in enumerate(lines) if _is_report_separator(line)]
+        insert_at = separator_indices[-1] if separator_indices else len(lines)
+        lines[insert_at:insert_at] = trailing_blocks
+    return "\n".join(lines)
+
+
+def _placement_focus_line(label: str, placement: dict | None) -> str | None:
+    if not placement:
+        return None
+    sign = str(placement.get("sign", ""))
+    sign_label = sign if sign.endswith("座") else f"{sign}座"
+    psych = translate_psychology(
+        placement.get("planet", ""),
+        placement.get("sign", ""),
+        int(placement.get("house", 0) or 0),
+    )
+    traits = " / ".join(psych["psychological_traits"][:2]) or "その天体テーマ"
+    return (
+        f"{label}: {placement.get('planet')}が{sign_label}・第{placement.get('house')}ハウスにあり、"
+        f"『{traits}』が前面に出やすい配置です。"
+    )
+
+
+def _first_placement_action(placement: dict | None) -> str | None:
+    if not placement:
+        return None
+    actions = suggest_actions_for_placement(placement, limit=1)
+    return actions[0] if actions else None
+
+
+def _aspect_focus_line(label: str, asp: dict | None, mode: str) -> str | None:
+    if not asp:
+        return None
+    enriched = interpret_aspect(asp, mode=mode)
+    return (
+        f"{label}: {asp.get('planet1')}と{asp.get('planet2')}の{asp.get('aspect')}が"
+        f"『{enriched['psychological_dynamic']}』を動かしやすい局面です。"
+    )
+
+
+def _first_aspect_action(asp: dict | None, mode: str) -> str | None:
+    if not asp:
+        return None
+    actions = suggest_actions_for_aspect(asp, limit=1)
+    if actions:
+        return actions[0]
+    return interpret_aspect(asp, mode=mode)["practical_guidance"]
+
+
 def _build_natal_style_interpretation(
     natal_chart: list,
     aspects_sets: list,
@@ -2372,15 +2499,35 @@ def generate_synastry_interpretation(
 
     lines.append("\n" + "=" * 60)
     lines.append("※この相性レポートは2人の天体配置に基づく自動生成テキストです。")
-    return "\n".join(lines)
+    summary_lines = [
+        _aspect_focus_line("関係の焦点", selected[0] if selected else None, mode="synastry"),
+        f"関係運用の軸: 全体同期度は {syn_phase['relationship_phase_score']:.2f} で、感情結合 {syn_phase['emotional_phase_coupling']:.2f} / 引力結合 {syn_phase['attraction_phase_coupling']:.2f} が参考になります。" if USE_USCS_PHASE and syn_phase else None,
+        "読みどころ: 『惹かれやすさ』と『長続きの運用』を分けて読むほど、相性の使い方が安定します。",
+    ]
+    action_lines = [
+        choose_non_repeating_synastry_action_hint("emotional", set(), section_aspects.get("emotional", [])),
+        choose_non_repeating_synastry_action_hint("stability", set(), section_aspects.get("stability", [])),
+        "衝突を避けるより、回復の手順を先に決めておくと関係の消耗を減らしやすくなります。",
+    ]
+    note_lines = [
+        "強い attraction があっても、返信速度や距離感の運用が噛み合うかは別軸として確認すると判断がぶれにくいです。",
+    ]
+    return _apply_report_quality_frame(
+        "\n".join(lines),
+        mode="synastry",
+        summary_lines=summary_lines,
+        action_lines=action_lines,
+        note_lines=note_lines,
+    )
 
 def generate_progressed_interpretation(chart: list, aspects_sets: list, composite_sets: list, person_name: str = "あなた") -> str:
     progressed_chart = normalize_node_objects(chart)
     header = generate_report_header("progressed", person_name=person_name)
     lines = header[:]
+    progressed_themes = generate_progressed_theme(progressed_chart)
 
     lines.append("\n【最近の内面テーマ】")
-    for line in generate_progressed_theme(progressed_chart):
+    for line in progressed_themes:
         lines.append(f"- {line}")
 
     lines.append("\n【時期の読み替え（生活現象）】")
@@ -2390,7 +2537,8 @@ def generate_progressed_interpretation(chart: list, aspects_sets: list, composit
 
     lines.append("\n【アスペクトが示す最近の学習テーマ】")
     gathered_aspects = [asp for aspects, _title in aspects_sets for asp in dedupe_aspects(aspects)]
-    top_aspects = sorted(gathered_aspects, key=_aspect_priority_score)[:4]
+    priority_aspects = [asp for asp in gathered_aspects if asp.get("aspect") in MAJOR_ASPECTS] or gathered_aspects
+    top_aspects = sorted(priority_aspects, key=_aspect_priority_score)[:4]
     for asp in top_aspects:
         lines.append(f"- {synthesize_aspect(asp, mode='progressed')}")
     if not top_aspects:
@@ -2401,7 +2549,26 @@ def generate_progressed_interpretation(chart: list, aspects_sets: list, composit
     lines.append("- 今は、タスク管理より先に感情ログを整えるほど、判断の質が安定します。")
     lines.append("\n" + "=" * 60)
     lines.append("※このプログレスレポートは二次進行チャートの時期性に基づく自動生成テキストです。")
-    return "\n".join(dedupe_similar_lines(lines))
+    summary_lines = [
+        f"内面変化の軸: {progressed_themes[0]}" if progressed_themes else None,
+        _aspect_focus_line("最近の学習テーマ", top_aspects[0] if top_aspects else None, mode="progressed"),
+        "実務の見方: 『何を増やすべきか』より『何が今は合わなくなったか』を見ると判断しやすい時期です。",
+    ]
+    action_lines = [
+        "以前なら回せたやり方で違和感が出る部分を1つだけ棚卸しし、今週は更新候補を試してください。",
+        _first_aspect_action(top_aspects[0] if top_aspects else None, mode="progressed"),
+        "感情ログを短く残し、判断が安定した日と崩れた日の差を見つけると使いやすいです。",
+    ]
+    note_lines = [
+        "プログレスは外側の派手な出来事より、納得の仕方や気持ちの重心がどう変わるかに注目すると読みやすいです。",
+    ]
+    return _apply_report_quality_frame(
+        "\n".join(dedupe_similar_lines(lines)),
+        mode="progressed",
+        summary_lines=summary_lines,
+        action_lines=action_lines,
+        note_lines=note_lines,
+    )
 
 def build_transit_timing_window(asp: dict, window: float = 2.0) -> str:
     orb = float(asp.get("orb", 99.0))
@@ -2415,14 +2582,35 @@ def generate_transit_interpretation(chart: list, aspects_sets: list, composite_s
     theme = extract_transit_theme(aspects_sets)
     base = _build_natal_style_interpretation(chart, aspects_sets, composite_sets, person_name, header, mode="transit")
     all_aspects = [asp for aspects, _ in aspects_sets for asp in dedupe_aspects(aspects)]
-    top_aspect = sorted(all_aspects, key=lambda x: float(x.get("orb", 99.0)))[0] if all_aspects else None
+    priority_aspects = [asp for asp in all_aspects if asp.get("aspect") in MAJOR_ASPECTS] or all_aspects
+    top_aspect = sorted(priority_aspects, key=_aspect_priority_score)[0] if priority_aspects else None
     timing_line = f"- タイミング窓: {build_transit_timing_window(top_aspect)}" if top_aspect else "- タイミング窓: 主要ヒットは穏やかで、準備フェーズとして使いやすい時期です。"
     hit_line = (
         f"- ナタルヒット: {top_aspect.get('planet1')}にトランジット{top_aspect.get('planet2')}が{top_aspect.get('aspect')}。"
         if top_aspect
         else "- ナタルヒット: 目立つ単発ヒットより、複数要因の重なりで現象化しやすい局面です。"
     )
-    return base + f"\n\n【トランジット視点の補足】\n- 今の外部テーマ: {theme}。\n{hit_line}\n{timing_line}\n- 現象を急いで評価するより、反応の良い行動を3週間単位で残すほど運気を使いやすくなります。"
+    report_text = base + f"\n\n【トランジット視点の補足】\n- 今の外部テーマ: {theme}。\n{hit_line}\n{timing_line}\n- 現象を急いで評価するより、反応の良い行動を3週間単位で残すほど運気を使いやすくなります。"
+    summary_lines = [
+        f"外部テーマ: {theme}。",
+        hit_line.replace("- ", ""),
+        timing_line.replace("- ", ""),
+    ]
+    action_lines = [
+        _first_aspect_action(top_aspect, mode="transit"),
+        "反応の良い行動だけを3週間単位で残すと、時期の波を実務へ落とし込みやすくなります。",
+        "大きな決断は一発で固めるより、締切と検証回数を細かく切るとブレにくいです。",
+    ]
+    note_lines = [
+        "トランジットは『今すぐ全部変えるべき』という意味ではなく、追い風と負荷の発生地点を知る補助線です。",
+    ]
+    return _apply_report_quality_frame(
+        report_text,
+        mode="transit",
+        summary_lines=summary_lines,
+        action_lines=action_lines,
+        note_lines=note_lines,
+    )
 
 
 def generate_triple_interpretation(natal_chart: list, progress_chart: list, transit_chart: list, aspect_sets: list, person_name: str = "あなた") -> str:
@@ -2452,16 +2640,58 @@ def generate_triple_interpretation(natal_chart: list, progress_chart: list, tran
         "\n" + "=" * 60,
         "※このトリプルレポートはネイタル・プログレス・トランジット統合に基づく自動生成テキストです。",
     ])
-    return "\n".join(lines)
+    summary_lines = [
+        f"本質の軸: {natal_theme}",
+        f"最近の変化: {progressed_theme}",
+        f"今の統合テーマ: {integrated}",
+    ]
+    action_lines = [
+        "今週は『続けること1つ・減らすこと1つ・試すこと1つ』を同じフォーマットで記録してください。",
+        "複数テーマが同時に動く時期ほど、全部を最適化するより最重要テーマを1つ決める方が安定します。",
+        f"三層共鳴度 {triple_phase['triple_phase_resonance']:.2f} / 緊張度 {triple_phase['triple_phase_tension']:.2f} を、行動量より優先順位調整の参考値として扱うと実務向きです。" if triple_phase else None,
+    ]
+    note_lines = [
+        "トリプルは情報量が多いので、『本質』『最近の内面』『外部タイミング』を別々に読み、最後に重なる点だけ拾うと判断しやすいです。",
+    ]
+    return _apply_report_quality_frame(
+        "\n".join(lines),
+        mode="triple",
+        summary_lines=summary_lines,
+        action_lines=action_lines,
+        note_lines=note_lines,
+    )
 
 def generate_natal_interpretation(natal_chart: list, aspects_sets: list, composite_sets: list, person_name: str = "あなた") -> str:
-    return _build_natal_style_interpretation(
+    chart = normalize_node_objects(natal_chart)
+    sun = next((p for p in chart if p.get("planet") == "太陽"), None)
+    moon = next((p for p in chart if p.get("planet") == "月"), None)
+    report_text = _build_natal_style_interpretation(
         natal_chart,
         aspects_sets,
         composite_sets,
         person_name,
         generate_report_header("natal", person_name=person_name),
         mode="natal",
+    )
+    summary_lines = [
+        _placement_focus_line("核の軸", sun),
+        _placement_focus_line("感情の軸", moon),
+        f"全体バランス: {summarize_element_mode_balance(chart)}",
+    ]
+    action_lines = [
+        _first_placement_action(sun),
+        _first_placement_action(moon),
+        *suggest_actions_for_balance(chart, limit=2),
+    ]
+    note_lines = [
+        "出生図は長期的な癖と強みを見る地図なので、短期の気分や一時的な不調と切り分けて読むと活かしやすいです。",
+    ]
+    return _apply_report_quality_frame(
+        report_text,
+        mode="natal",
+        summary_lines=summary_lines,
+        action_lines=action_lines,
+        note_lines=note_lines,
     )
 
 
