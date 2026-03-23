@@ -242,9 +242,17 @@
         <div class="section-title">{{ summary_title }}</div>
         <p class="hint">{{ summary_description }}</p>
         <textarea readonly>{{ result_text or "ここに要点サマリーが表示されます。" }}</textarea>
+        <div class="section-title">{{ llm_prompt_title }}</div>
+        <p class="hint">{{ llm_prompt_description }}</p>
+        <textarea readonly>{{ llm_prompt_text or "ここに LLM 読み解き用プロンプトが表示されます。" }}</textarea>
+        <div class="section-title">{{ compact_data_title }}</div>
+        <p class="hint">{{ compact_data_description }}</p>
+        <textarea readonly>{{ compact_data_text or "ここに圧縮データが表示されます。" }}</textarea>
         <div class="meta">
           <div><strong>要点サマリー保存先</strong><br>{{ result_path or "data/results/astrology_result.txt" }}</div>
           <div><strong>詳細レポート保存先</strong><br>{{ interpretation_path or "data/results/astrology_interpretation.txt" }}</div>
+          <div><strong>LLMプロンプト保存先</strong><br>{{ llm_prompt_path or "data/results/astrology_llm_prompt.txt" }}</div>
+          <div><strong>圧縮データ保存先</strong><br>{{ compact_data_path or "data/results/astrology_compact_data.json" }}</div>
         </div>
       </section>
     </div>
