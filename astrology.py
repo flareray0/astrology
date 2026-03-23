@@ -150,6 +150,22 @@ CHART_TYPE_LABELS = {
     "synastry": "シナストリー（相性）",
 }
 
+STRUCTURED_SUMMARY_LABELS = {
+    "natal": "出生傾向の要点サマリー",
+    "progressed": "内面変化の要点サマリー",
+    "transit": "時期運の要点サマリー",
+    "triple": "三層統合の要点サマリー",
+    "synastry": "相性の要点サマリー",
+}
+
+STRUCTURED_SUMMARY_GUIDANCE = {
+    "natal": "生まれ持った傾向と、活かしやすい動き方を短時間で確認するための整理版です。",
+    "progressed": "最近の内面変化と、今の自分に合う進め方を素早くつかむための整理版です。",
+    "transit": "いま反応しやすい外部テーマと、時期の使い方を先に把握するための整理版です。",
+    "triple": "本質・内面変化・外部時期を一枚で見比べ、優先順位を決めやすくする整理版です。",
+    "synastry": "相手との噛み合いやすい点と、調整が要る点を短時間で確認するための整理版です。",
+}
+
 LEGACY_MODE_ALIASES = {
     "triple_chart": "triple",
 }
@@ -1838,26 +1854,43 @@ def synthesize_interpretation(
     mode: str = "natal",
 ) -> str:
     """配置・アスペクト・オーバーレイを一つの可読レポートに統合する。"""
-    lines = [f"Interpretation synthesis ({mode})"]
+    mode_label = CHART_TYPE_LABELS.get(mode, mode)
+    summary_label = STRUCTURED_SUMMARY_LABELS.get(mode, f"{mode_label}の要点サマリー")
+    guidance = STRUCTURED_SUMMARY_GUIDANCE.get(mode, "詳細レポートを読む前に、重要ポイントだけ先に把握するための整理版です。")
+    lines = [
+        f"【{summary_label}】",
+        f"対象モード: {mode_label}",
+        f"使いどころ: {guidance}",
+        "位置づけ: 『詳細レポート』が文章でじっくり読む版で、こちらは要点だけを素早く確認する版です。",
+        "=" * 60,
+    ]
     if placements:
-        lines.append("\nPlacements")
+        lines.append("\n【主要な配置】")
         for item in placements[:5]:
             lines.append(f"- {item['placement_meaning']}")
-            lines.append(f"  Psychological pattern: {item['psychological_pattern']}")
-            lines.append(f"  Manifestation: {item['life_manifestation']}")
-            lines.append(f"  Advice: {item['practical_advice']}")
+            lines.append(f"  心理傾向: {item['psychological_pattern']}")
+            lines.append(f"  出やすい形: {item['life_manifestation']}")
+            lines.append(f"  活かし方: {item['practical_advice']}")
     if aspects:
-        lines.append("\nAspects")
+        lines.append("\n【主要なアスペクト】")
         for item in aspects[:5]:
             lines.append(f"- {item['identity']}")
-            lines.append(f"  Psychological theme: {item['psychological_dynamic']}")
-            lines.append(f"  Manifestation: {item['life_manifestation']}")
-            lines.append(f"  Advice: {item['practical_guidance']}")
+            lines.append(f"  心理テーマ: {item['psychological_dynamic']}")
+            lines.append(f"  出やすい形: {item['life_manifestation']}")
+            lines.append(f"  実践ヒント: {item['practical_guidance']}")
     if overlays:
-        lines.append("\nHouse overlays")
+        lines.append("\n【関係の重なり方】")
         for item in overlays[:4]:
             lines.append(f"- {item['placement_meaning']}")
-            lines.append(f"  Advice: {item['practical_advice']}")
+            lines.append(f"  実践ヒント: {item['practical_advice']}")
+    lines.extend(
+        [
+            "\n【この要点サマリーの読み方】",
+            "- まず『対象モード』と『主要な配置』で土台を確認します。",
+            "- 次に『主要なアスペクト』で、今強く動きやすいテーマを拾います。",
+            "- 迷ったときは、詳細レポートに戻って背景説明を読み足す使い方がおすすめです。",
+        ]
+    )
     return "\n".join(lines)
 
 

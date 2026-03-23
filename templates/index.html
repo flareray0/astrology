@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="ja">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Astrology Local App</title>
+  <title>ローカル星読みレポート</title>
   <style>
     :root {
       --bg: #f5efe5;
@@ -129,120 +129,122 @@
 </head>
 <body>
   <main>
-    <h1>Astrology Local App</h1>
-    <p class="lead">Generate local astrology reports for natal, progressed, transit, triple, and synastry charts. The primary supported server entry point remains <code>uvicorn web.app:app --reload</code>.</p>
+    <h1>ローカル星読みレポート</h1>
+    <p class="lead">ネイタル、プログレス、トランジット、トリプル、シナストリーの星読みをローカルで作成できます。主な起動方法は <code>uvicorn web.app:app --reload</code> です。</p>
 
     <div class="grid">
       <section class="panel">
-        <h2>Chart Input</h2>
+        <h2>入力フォーム</h2>
         {% if error_message %}
         <div class="error">{{ error_message }}</div>
         {% endif %}
         <form method="post" action="/api/report">
           <div class="field-grid">
             <div class="full">
-              <label for="chart_mode">Chart mode</label>
+              <label for="chart_mode">占いモード</label>
               <select id="chart_mode" name="chart_mode">
-                {% for mode in ["natal", "progressed", "transit", "triple", "synastry"] %}
-                <option value="{{ mode }}" {% if form.chart_mode == mode %}selected{% endif %}>{{ mode }}</option>
+                {% for mode, label in chart_mode_options %}
+                <option value="{{ mode }}" {% if form.chart_mode == mode %}selected{% endif %}>{{ label }}</option>
                 {% endfor %}
               </select>
             </div>
             <div class="full">
-              <label for="person_name">Person name</label>
+              <label for="person_name">お名前</label>
               <input id="person_name" type="text" name="person_name" value="{{ form.person_name }}">
             </div>
           </div>
 
-          <div class="section-title">Primary chart</div>
+          <div class="section-title">基本チャート</div>
           <div class="field-grid">
             <div>
-              <label for="birth_date">Birth date</label>
+              <label for="birth_date">生年月日</label>
               <input id="birth_date" type="date" name="birth_date" value="{{ form.birth_date }}">
             </div>
             <div>
-              <label for="birth_time">Birth time</label>
+              <label for="birth_time">出生時刻</label>
               <input id="birth_time" type="time" name="birth_time" value="{{ form.birth_time }}">
             </div>
             <div>
-              <label for="latitude">Latitude</label>
+              <label for="latitude">緯度</label>
               <input id="latitude" type="number" step="0.0001" name="latitude" value="{{ form.latitude }}">
             </div>
             <div>
-              <label for="longitude">Longitude</label>
+              <label for="longitude">経度</label>
               <input id="longitude" type="number" step="0.0001" name="longitude" value="{{ form.longitude }}">
             </div>
             <div class="full">
-              <label for="timezone">Timezone offset</label>
+              <label for="timezone">UTCオフセット</label>
               <input id="timezone" type="number" step="0.5" name="timezone" value="{{ form.timezone }}">
             </div>
           </div>
 
-          <div class="section-title">Progressed chart</div>
+          <div class="section-title">プログレス用日時</div>
           <div class="field-grid">
             <div>
-              <label for="progressed_date">Progressed date</label>
+              <label for="progressed_date">対象日</label>
               <input id="progressed_date" type="date" name="progressed_date" value="{{ form.progressed_date }}">
             </div>
             <div>
-              <label for="progressed_time">Progressed time</label>
+              <label for="progressed_time">対象時刻</label>
               <input id="progressed_time" type="time" name="progressed_time" value="{{ form.progressed_time }}">
             </div>
           </div>
 
-          <div class="section-title">Transit chart</div>
+          <div class="section-title">トランジット用日時</div>
           <div class="field-grid">
             <div>
-              <label for="transit_date">Transit date</label>
+              <label for="transit_date">対象日</label>
               <input id="transit_date" type="date" name="transit_date" value="{{ form.transit_date }}">
             </div>
             <div>
-              <label for="transit_time">Transit time</label>
+              <label for="transit_time">対象時刻</label>
               <input id="transit_time" type="time" name="transit_time" value="{{ form.transit_time }}">
             </div>
           </div>
 
-          <div class="section-title">Synastry second person</div>
+          <div class="section-title">相性相手の情報</div>
           <div class="field-grid">
             <div class="full">
-              <label for="person2_name">Second person name</label>
+              <label for="person2_name">お相手のお名前</label>
               <input id="person2_name" type="text" name="person2_name" value="{{ form.person2_name }}">
             </div>
             <div>
-              <label for="person2_birth_date">Birth date</label>
+              <label for="person2_birth_date">生年月日</label>
               <input id="person2_birth_date" type="date" name="person2_birth_date" value="{{ form.person2_birth_date }}">
             </div>
             <div>
-              <label for="person2_birth_time">Birth time</label>
+              <label for="person2_birth_time">出生時刻</label>
               <input id="person2_birth_time" type="time" name="person2_birth_time" value="{{ form.person2_birth_time }}">
             </div>
             <div>
-              <label for="person2_latitude">Latitude</label>
+              <label for="person2_latitude">緯度</label>
               <input id="person2_latitude" type="number" step="0.0001" name="person2_latitude" value="{{ form.person2_latitude }}">
             </div>
             <div>
-              <label for="person2_longitude">Longitude</label>
+              <label for="person2_longitude">経度</label>
               <input id="person2_longitude" type="number" step="0.0001" name="person2_longitude" value="{{ form.person2_longitude }}">
             </div>
             <div class="full">
-              <label for="person2_timezone">Timezone offset</label>
+              <label for="person2_timezone">UTCオフセット</label>
               <input id="person2_timezone" type="number" step="0.5" name="person2_timezone" value="{{ form.person2_timezone }}">
             </div>
           </div>
 
-          <button type="submit">Generate report</button>
-          <p class="hint">HTML form submissions render in place via <code>/api/report</code>. Mode-specific API endpoints are also available at <code>/api/report/&lt;mode&gt;</code>.</p>
+          <button type="submit">レポートを作成</button>
+          <p class="hint">このフォームは <code>/api/report</code> に送信され、ページ内に結果を表示します。モード別の API は <code>/api/report/&lt;mode&gt;</code> でも利用できます。</p>
         </form>
       </section>
 
       <section class="panel">
-        <h2>Generated report</h2>
-        <textarea readonly>{{ report or "Your interpretation will appear here." }}</textarea>
-        <div class="section-title">Structured summary</div>
-        <textarea readonly>{{ result_text or "The structured summary is saved to astrology_result.txt." }}</textarea>
+        <h2>{{ detailed_report_title }}</h2>
+        <p class="hint">{{ detailed_report_description }}</p>
+        <textarea readonly>{{ report or "ここに詳細レポートが表示されます。" }}</textarea>
+        <div class="section-title">{{ summary_title }}</div>
+        <p class="hint">{{ summary_description }}</p>
+        <textarea readonly>{{ result_text or "ここに要点サマリーが表示されます。" }}</textarea>
         <div class="meta">
-          <div><strong>Result file</strong><br>{{ result_path or "data/results/astrology_result.txt" }}</div>
-          <div><strong>Interpretation file</strong><br>{{ interpretation_path or "data/results/astrology_interpretation.txt" }}</div>
+          <div><strong>要点サマリー保存先</strong><br>{{ result_path or "data/results/astrology_result.txt" }}</div>
+          <div><strong>詳細レポート保存先</strong><br>{{ interpretation_path or "data/results/astrology_interpretation.txt" }}</div>
         </div>
       </section>
     </div>

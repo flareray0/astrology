@@ -7,7 +7,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from astrology import build_chart_from_input, run_report_by_mode
+from astrology import CHART_TYPE_LABELS, build_chart_from_input, run_report_by_mode
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +18,19 @@ app = FastAPI(title="Astrology Local App")
 
 if (BASE_DIR / "static").exists():
     app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
+
+
+CHART_MODE_OPTIONS = [
+    ("natal", CHART_TYPE_LABELS["natal"]),
+    ("progressed", CHART_TYPE_LABELS["progressed"]),
+    ("transit", CHART_TYPE_LABELS["transit"]),
+    ("triple", CHART_TYPE_LABELS["triple"]),
+    ("synastry", CHART_TYPE_LABELS["synastry"]),
+]
+
+
+def _mode_label(chart_mode: str) -> str:
+    return CHART_TYPE_LABELS.get(chart_mode, chart_mode)
 
 
 def _default_form_values() -> dict:
@@ -119,9 +132,17 @@ def _aspect_count(aspects: list) -> int:
 
 
 def _render_page(request: Request, form_values: dict, report_payload: dict | None = None, error_message: str | None = None) -> HTMLResponse:
+    chart_mode = str(form_values.get("chart_mode") or "natal")
+    mode_label = _mode_label(chart_mode)
     context = {
         "request": request,
         "form": {**_default_form_values(), **form_values},
+        "chart_mode_options": CHART_MODE_OPTIONS,
+        "mode_label": mode_label,
+        "detailed_report_title": f"{mode_label}の詳細レポート",
+        "detailed_report_description": "背景説明や解釈のつながりまで含めて、文章でじっくり読むための本編です。",
+        "summary_title": f"{mode_label}の要点サマリー",
+        "summary_description": "重要ポイントだけを短時間で確認する整理版です。まずこちらを見てから詳細レポートを読むと差が分かりやすいです。",
         "report": report_payload["interpretation"] if report_payload else "",
         "result_text": report_payload.get("result_text", "") if report_payload else "",
         "result_path": report_payload.get("result_path", "") if report_payload else "",
@@ -196,6 +217,7 @@ async def _api_report(mode: str, **kwargs) -> JSONResponse:
         return JSONResponse(
             {
                 "mode": mode,
+                "mode_label": _mode_label(mode),
                 "interpretation": payload["interpretation"],
                 "result_text": payload.get("result_text", ""),
                 "result_path": payload.get("result_path"),

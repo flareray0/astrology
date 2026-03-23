@@ -9,7 +9,9 @@ client = TestClient(app)
 def test_root_page_renders():
     response = client.get("/")
     assert response.status_code == 200
-    assert "Astrology Local App" in response.text
+    assert "ローカル星読みレポート" in response.text
+    assert "占いモード" in response.text
+    assert "要点サマリー" in response.text
 
 
 def test_natal_api_report_returns_text_and_paths():
@@ -27,7 +29,11 @@ def test_natal_api_report_returns_text_and_paths():
     payload = response.json()
     assert response.status_code == 200
     assert payload["mode"] == "natal"
+    assert payload["mode_label"] == "ネイタルチャート（出生図）"
     assert "太陽" in payload["interpretation"]
+    assert "【出生傾向の要点サマリー】" in payload["result_text"]
+    assert "対象モード: ネイタルチャート（出生図）" in payload["result_text"]
+    assert "Interpretation synthesis" not in payload["result_text"]
     assert payload["result_path"].endswith("astrology_result.txt")
 
 
@@ -52,4 +58,7 @@ def test_synastry_api_report_returns_relationship_text():
     payload = response.json()
     assert response.status_code == 200
     assert payload["mode"] == "synastry"
+    assert payload["mode_label"] == "シナストリー（相性）"
     assert "相性レポート" in payload["interpretation"]
+    assert "【相性の要点サマリー】" in payload["result_text"]
+    assert "対象モード: シナストリー（相性）" in payload["result_text"]
