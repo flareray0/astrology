@@ -11,6 +11,7 @@ def test_root_page_renders():
     assert response.status_code == 200
     assert "ローカル星読みレポート" in response.text
     assert "占いモード" in response.text
+    assert "だれでも読めるやさしい版" in response.text
     assert "要点サマリー" in response.text
     assert "LLM読み解き用プロンプト" in response.text
     assert "圧縮データ" in response.text
@@ -33,12 +34,16 @@ def test_natal_api_report_returns_text_and_paths():
     assert payload["mode"] == "natal"
     assert payload["mode_label"] == "ネイタルチャート（出生図）"
     assert "太陽" in payload["interpretation"]
+    assert "【だれでも読めるやさしい版】" in payload["easy_report_text"]
+    assert "この紙は、むずかしい占星術の言葉をできるだけへらした説明です。" in payload["easy_report_text"]
+    assert "【言葉の短い説明】" in payload["easy_report_text"]
     assert "【出生傾向の要点サマリー】" in payload["result_text"]
     assert "今回の読み方: ネイタルチャート（出生図）" in payload["result_text"]
     assert "ひとこと: むずかしく考えなくて大丈夫です。" in payload["result_text"]
     assert "Interpretation synthesis" not in payload["result_text"]
     assert "以下の圧縮データだけを根拠に、日本語で読み解いてください。" in payload["llm_prompt_text"]
     assert payload["compact_data"]["対象モード"] == "ネイタルチャート（出生図）"
+    assert payload["easy_report_path"].endswith("astrology_easy_report.txt")
     assert payload["result_path"].endswith("astrology_result.txt")
     assert payload["llm_prompt_path"].endswith("astrology_llm_prompt.txt")
     assert payload["compact_data_path"].endswith("astrology_compact_data.json")
@@ -67,6 +72,7 @@ def test_synastry_api_report_returns_relationship_text():
     assert payload["mode"] == "synastry"
     assert payload["mode_label"] == "シナストリー（相性）"
     assert "相性レポート" in payload["interpretation"]
+    assert "相性: ふたりのかみあわせ" in payload["easy_report_text"]
     assert "【相性の要点サマリー】" in payload["result_text"]
     assert "今回の読み方: シナストリー（相性）" in payload["result_text"]
     assert payload["compact_data"]["対象者"] == "A × B"

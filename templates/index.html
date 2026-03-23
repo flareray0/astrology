@@ -236,6 +236,9 @@
       </section>
 
       <section class="panel">
+        <h2>{{ easy_report_title }}</h2>
+        <p class="hint">{{ easy_report_description }}</p>
+        <textarea readonly>{{ easy_report_text or "ここにだれでも読めるやさしい版が表示されます。" }}</textarea>
         <h2>{{ detailed_report_title }}</h2>
         <p class="hint">{{ detailed_report_description }}</p>
         <textarea readonly>{{ report or "ここに詳細レポートが表示されます。" }}</textarea>
@@ -249,6 +252,7 @@
         <p class="hint">{{ compact_data_description }}</p>
         <textarea readonly>{{ compact_data_text or "ここに圧縮データが表示されます。" }}</textarea>
         <div class="meta">
+          <div><strong>やさしい版保存先</strong><br>{{ easy_report_path or "data/results/astrology_easy_report.txt" }}</div>
           <div><strong>要点サマリー保存先</strong><br>{{ result_path or "data/results/astrology_result.txt" }}</div>
           <div><strong>詳細レポート保存先</strong><br>{{ interpretation_path or "data/results/astrology_interpretation.txt" }}</div>
           <div><strong>LLMプロンプト保存先</strong><br>{{ llm_prompt_path or "data/results/astrology_llm_prompt.txt" }}</div>

@@ -38,6 +38,7 @@ def test_report_modes_include_consistent_quality_sections(mode: str, expected_ma
         person2_name="Partner",
     )
     interpretation = payload["interpretation"]
+    easy_report = payload["easy_report_text"]
     result_text = payload["result_text"]
     assert "【まずひとこと】" in interpretation
     assert "【最初に押さえたい要点】" in interpretation
@@ -46,6 +47,9 @@ def test_report_modes_include_consistent_quality_sections(mode: str, expected_ma
     assert "むずかしく考えなくて大丈夫" in interpretation or "全部を同時に理解しなくて大丈夫" in interpretation or "今の自分の変化をやさしく確認" in interpretation or "時期運は怖がるためではなく" in interpretation or "相性は合う合わないを決めつけるためではなく" in interpretation
     assert expected_marker in interpretation
     assert "※この" in interpretation
+    assert "【だれでも読めるやさしい版】" in easy_report
+    assert "この紙は、むずかしい占星術の言葉をできるだけへらした説明です。" in easy_report
+    assert "アスペクト: 星どうしの組み合わせ。" in easy_report
     assert "【星どうしの大事な関係】" in result_text
     assert "やってみるコツ:" in result_text
 

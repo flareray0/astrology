@@ -113,6 +113,7 @@ If no valid `.se1` files are found, startup fails with a clear error listing the
 
 Generated files are written to `data/results/`:
 
+- `astrology_easy_report.txt`
 - `astrology_result.txt`
 - `astrology_interpretation.txt`
 
@@ -157,6 +158,7 @@ The CLI prints the report and saves both output files under `data/results/`.
 
 生成ファイルは `data/results/` に保存されます。
 
+- `astrology_easy_report.txt`
 - `astrology_result.txt`
 - `astrology_interpretation.txt`
 
