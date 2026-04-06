@@ -13,6 +13,7 @@ def test_root_page_renders():
     assert "占いモード" in response.text
     assert "だれでも読めるやさしい版" in response.text
     assert "要点サマリー" in response.text
+    assert "プロ向け生データ" in response.text
     assert "LLM読み解き用プロンプト" in response.text
     assert "圧縮データ" in response.text
 
@@ -40,6 +41,10 @@ def test_natal_api_report_returns_text_and_paths():
     assert "【出生傾向の要点サマリー】" in payload["result_text"]
     assert "今回の読み方: ネイタルチャート（出生図）" in payload["result_text"]
     assert "ひとこと: むずかしく考えなくて大丈夫です。" in payload["result_text"]
+    assert "=== ネイタルチャートの計算と表示 ===" in payload["raw_chart_text"]
+    assert "--- ネイタルチャート ---" in payload["raw_chart_text"]
+    assert "太陽 が" in payload["raw_chart_text"]
+    assert "ハウス9に位置。" in payload["raw_chart_text"]
     assert "Interpretation synthesis" not in payload["result_text"]
     assert "以下の圧縮データだけを根拠に、日本語で読み解いてください。" in payload["llm_prompt_text"]
     assert payload["compact_data"]["対象モード"] == "ネイタルチャート（出生図）"

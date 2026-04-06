@@ -121,6 +121,36 @@
       border: 1px solid var(--border);
       border-radius: 12px;
     }
+    .results-tabs {
+      margin-top: 18px;
+    }
+    .tablist {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .tab-button {
+      width: auto;
+      margin-top: 0;
+      padding: 8px 14px;
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--ink);
+      font-weight: 600;
+      box-shadow: none;
+    }
+    .tab-button.active {
+      background: linear-gradient(135deg, var(--accent), #7e3d22);
+      color: #fff;
+      border-color: transparent;
+    }
+    .tab-panel {
+      display: none;
+    }
+    .tab-panel.active {
+      display: block;
+    }
     @media (max-width: 900px) {
       .grid { grid-template-columns: 1fr; }
       .field-grid, .meta { grid-template-columns: 1fr; }
@@ -130,7 +160,7 @@
 <body>
   <main>
     <h1>ローカル星読みレポート</h1>
-    <p class="lead">ネイタル、プログレス、トランジット、トリプル、シナストリーの星読みをローカルで作成できます。主な起動方法は <code>uvicorn web.app:app --reload</code> です。</p>
+    <p class="lead">ネイタル、プログレス、トランジット、トリプル、シナストリーの星読みをローカルで作成できます。入力フォームから作成した結果は <code>data/results</code> に保存されます。</p>
 
     <div class="grid">
       <section class="panel">
@@ -138,7 +168,7 @@
         {% if error_message %}
         <div class="error">{{ error_message }}</div>
         {% endif %}
-        <form method="post" action="/api/report">
+        <form id="report-form" method="post" action="/api/report">
           <div class="field-grid">
             <div class="full">
               <label for="chart_mode">占いモード</label>
@@ -236,21 +266,54 @@
       </section>
 
       <section class="panel">
-        <h2>{{ easy_report_title }}</h2>
-        <p class="hint">{{ easy_report_description }}</p>
-        <textarea readonly>{{ easy_report_text or "ここにだれでも読めるやさしい版が表示されます。" }}</textarea>
-        <h2>{{ detailed_report_title }}</h2>
-        <p class="hint">{{ detailed_report_description }}</p>
-        <textarea readonly>{{ report or "ここに詳細レポートが表示されます。" }}</textarea>
-        <div class="section-title">{{ summary_title }}</div>
-        <p class="hint">{{ summary_description }}</p>
-        <textarea readonly>{{ result_text or "ここに要点サマリーが表示されます。" }}</textarea>
-        <div class="section-title">{{ llm_prompt_title }}</div>
-        <p class="hint">{{ llm_prompt_description }}</p>
-        <textarea readonly>{{ llm_prompt_text or "ここに LLM 読み解き用プロンプトが表示されます。" }}</textarea>
-        <div class="section-title">{{ compact_data_title }}</div>
-        <p class="hint">{{ compact_data_description }}</p>
-        <textarea readonly>{{ compact_data_text or "ここに圧縮データが表示されます。" }}</textarea>
+        <h2>結果ビュー</h2>
+        <p class="hint">読む目的に合わせて表示を切り替えられます。まずは要点サマリー、専門家やプロ向けLLMにはプロ向け生データがおすすめです。</p>
+        <div class="results-tabs" data-tabs>
+          <div class="tablist" role="tablist" aria-label="結果ビュー切り替え">
+            <button type="button" class="tab-button" data-tab-target="easy-panel">{{ easy_report_title }}</button>
+            <button type="button" class="tab-button" data-tab-target="detail-panel">{{ detailed_report_title }}</button>
+            <button type="button" class="tab-button active" data-tab-target="summary-panel">{{ summary_title }}</button>
+            <button type="button" class="tab-button" data-tab-target="raw-panel">{{ raw_chart_title }}</button>
+            <button type="button" class="tab-button" data-tab-target="llm-panel">{{ llm_prompt_title }}</button>
+            <button type="button" class="tab-button" data-tab-target="compact-panel">{{ compact_data_title }}</button>
+          </div>
+
+          <section id="easy-panel" class="tab-panel">
+            <div class="section-title">{{ easy_report_title }}</div>
+            <p class="hint">{{ easy_report_description }}</p>
+            <textarea readonly>{{ easy_report_text or "ここにだれでも読めるやさしい版が表示されます。" }}</textarea>
+          </section>
+
+          <section id="detail-panel" class="tab-panel">
+            <div class="section-title">{{ detailed_report_title }}</div>
+            <p class="hint">{{ detailed_report_description }}</p>
+            <textarea readonly>{{ report or "ここに詳細レポートが表示されます。" }}</textarea>
+          </section>
+
+          <section id="summary-panel" class="tab-panel active">
+            <div class="section-title">{{ summary_title }}</div>
+            <p class="hint">{{ summary_description }}</p>
+            <textarea readonly>{{ result_text or "ここに要点サマリーが表示されます。" }}</textarea>
+          </section>
+
+          <section id="raw-panel" class="tab-panel">
+            <div class="section-title">{{ raw_chart_title }}</div>
+            <p class="hint">{{ raw_chart_description }}</p>
+            <textarea readonly>{{ raw_chart_text or "ここにプロ向け生データが表示されます。" }}</textarea>
+          </section>
+
+          <section id="llm-panel" class="tab-panel">
+            <div class="section-title">{{ llm_prompt_title }}</div>
+            <p class="hint">{{ llm_prompt_description }}</p>
+            <textarea readonly>{{ llm_prompt_text or "ここに LLM 読み解き用プロンプトが表示されます。" }}</textarea>
+          </section>
+
+          <section id="compact-panel" class="tab-panel">
+            <div class="section-title">{{ compact_data_title }}</div>
+            <p class="hint">{{ compact_data_description }}</p>
+            <textarea readonly>{{ compact_data_text or "ここに圧縮データが表示されます。" }}</textarea>
+          </section>
+        </div>
         <div class="meta">
           <div><strong>やさしい版保存先</strong><br>{{ easy_report_path or "data/results/astrology_easy_report.txt" }}</div>
           <div><strong>要点サマリー保存先</strong><br>{{ result_path or "data/results/astrology_result.txt" }}</div>
@@ -261,5 +324,19 @@
       </section>
     </div>
   </main>
+  <script>
+    document.querySelectorAll("[data-tabs]").forEach((tabsRoot) => {
+      const buttons = tabsRoot.querySelectorAll(".tab-button");
+      const panels = tabsRoot.querySelectorAll(".tab-panel");
+
+      buttons.forEach((button) => {
+        button.addEventListener("click", () => {
+          const targetId = button.dataset.tabTarget;
+          buttons.forEach((item) => item.classList.toggle("active", item === button));
+          panels.forEach((panel) => panel.classList.toggle("active", panel.id === targetId));
+        });
+      });
+    });
+  </script>
 </body>
 </html>

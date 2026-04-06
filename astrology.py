@@ -1102,6 +1102,127 @@ def save_results_to_text(
         f.write("\n".join(lines))
     print(f"[SAVE] 結果を保存しました: {filepath}")
 
+
+RAW_MODE_TITLES = {
+    "natal": "ネイタルチャートの計算と表示",
+    "progressed": "プログレスチャートの計算と表示",
+    "transit": "トランジットチャートの計算と表示",
+    "triple": "三重チャートの計算と表示",
+    "synastry": "シナストリーチャートの計算と表示",
+}
+
+
+def _append_raw_chart_block(lines: list[str], chart_name: str, chart: list[dict], cusps=None) -> None:
+    lines.append(f"\n--- {chart_name} ---")
+    for planet in chart:
+        retro_text = "（逆行）" if planet.get("retrograde", False) else ""
+        lines.append(
+            f"{planet['planet']}{retro_text} が {planet['sign']} {planet['longitude']:.2f}°、"
+            f"ハウス{planet['house']}に位置。"
+        )
+
+    if cusps is None:
+        return
+
+    lines.append(f"\n--- {chart_name}のハウスカスプ ---")
+    for i in range(1, 13):
+        cusp_degree = cusps[i] % 360.0
+        sign = int(cusp_degree // 30) % 12
+        lines.append(f"第{i}ハウス: {cusp_degree:.2f}°（{SIGNS[sign]}）")
+
+
+def _append_raw_aspect_block(lines: list[str], title: str, aspects: list[dict]) -> None:
+    lines.append(f"\n--- {title} ---")
+    if not aspects:
+        lines.append("アスペクトは検出されませんでした。")
+        return
+
+    for aspect in aspects:
+        planet1_retro = "（逆行）" if aspect.get("planet1_retrograde", False) else ""
+        planet2_retro = "（逆行）" if aspect.get("planet2_retrograde", False) else ""
+        exact_text = f" (実際の角度: {aspect['exact']:.2f}°)" if aspect.get("exact") is not None else ""
+        lines.append(
+            f"{aspect['planet1']}{planet1_retro}（{aspect['planet1_sign']}・H{aspect['planet1_house']}）と "
+            f"{aspect['planet2']}{planet2_retro}（{aspect['planet2_sign']}・H{aspect['planet2_house']}）が "
+            f"{aspect['aspect']}。オーブ: {aspect['orb']:.2f}°{exact_text}"
+        )
+
+
+def _append_raw_composite_block(lines: list[str], title: str, composite_aspects: list[dict]) -> None:
+    lines.append(f"\n--- {title} ---")
+    if not composite_aspects:
+        lines.append("複合アスペクトは見つかりませんでした。")
+        return
+
+    for composite in composite_aspects:
+        planets = "、".join(composite["planets"])
+        lines.append(f"{composite['type']}: {planets}")
+        details = composite.get("details", {})
+        for key, value in details.items():
+            if isinstance(value, list):
+                for item in value:
+                    lines.append(f"  - {key}: {item}")
+            else:
+                lines.append(f"  - {key}: {value}")
+
+
+def build_raw_chart_text(
+    *,
+    mode: str,
+    natal: dict,
+    progressed: dict | None = None,
+    transit: dict | None = None,
+    person2: dict | None = None,
+    person_name: str = "あなた",
+    person2_name: str = "相手",
+    aspects=None,
+    composite_aspects: list[dict] | None = None,
+) -> str:
+    lines = [f"=== {RAW_MODE_TITLES.get(mode, f'{mode}の計算と表示')} ==="]
+
+    if mode == "natal":
+        _append_raw_chart_block(lines, "ネイタルチャート", natal["chart"], natal.get("cusps"))
+        _append_raw_aspect_block(lines, "ネイタルチャートのアスペクト", aspects or [])
+        _append_raw_composite_block(lines, "ネイタルチャートの複合アスペクト", composite_aspects or [])
+        return "\n".join(lines)
+
+    if mode == "progressed":
+        if progressed is None:
+            return "\n".join(lines)
+        _append_raw_chart_block(lines, "ネイタルチャート", natal["chart"], natal.get("cusps"))
+        _append_raw_chart_block(lines, "プログレスチャート", progressed["chart"], progressed.get("cusps"))
+        _append_raw_aspect_block(lines, "ネイタル×プログレスのアスペクト", aspects or [])
+        return "\n".join(lines)
+
+    if mode == "transit":
+        if transit is None:
+            return "\n".join(lines)
+        _append_raw_chart_block(lines, "ネイタルチャート", natal["chart"], natal.get("cusps"))
+        _append_raw_chart_block(lines, "トランジットチャート", transit["chart"], transit.get("cusps"))
+        _append_raw_aspect_block(lines, "ネイタル×トランジットのアスペクト", aspects or [])
+        return "\n".join(lines)
+
+    if mode == "triple":
+        if progressed is None or transit is None:
+            return "\n".join(lines)
+        _append_raw_chart_block(lines, "ネイタルチャート", natal["chart"], natal.get("cusps"))
+        _append_raw_chart_block(lines, "プログレスチャート", progressed["chart"], progressed.get("cusps"))
+        _append_raw_chart_block(lines, "トランジットチャート", transit["chart"], transit.get("cusps"))
+        for aspect_set, label in aspects or []:
+            _append_raw_aspect_block(lines, label, aspect_set)
+        return "\n".join(lines)
+
+    if mode == "synastry":
+        if person2 is None:
+            return "\n".join(lines)
+        _append_raw_chart_block(lines, f"{person_name}のネイタルチャート", natal["chart"], natal.get("cusps"))
+        _append_raw_chart_block(lines, f"{person2_name}のネイタルチャート", person2["chart"], person2.get("cusps"))
+        _append_raw_aspect_block(lines, "シナストリーアスペクト", aspects or [])
+        return "\n".join(lines)
+
+    _append_raw_chart_block(lines, "チャート", natal["chart"], natal.get("cusps"))
+    return "\n".join(lines)
+
 # 占い師文体テンプレート（差分追加）
 def _orb_label(orb: float) -> str:
     """オーブの密度をラベルで返す（差分追加）。"""
@@ -3227,6 +3348,13 @@ def run_natal_report(target: dict, *, person_name: str = "あなた", include_mi
         placements=placement_interpretations,
         aspects=aspect_interpretations,
     )
+    raw_chart_text = build_raw_chart_text(
+        mode="natal",
+        natal=target,
+        person_name=person_name,
+        aspects=aspects,
+        composite_aspects=composites,
+    )
     llm_prompt_text = build_llm_reading_prompt(compact_data, mode="natal")
     files = _save_report_files(
         result_text,
@@ -3242,6 +3370,7 @@ def run_natal_report(target: dict, *, person_name: str = "あなた", include_mi
         "interpretation": interp,
         "easy_report_text": easy_report_text,
         "result_text": result_text,
+        "raw_chart_text": raw_chart_text,
         "llm_prompt_text": llm_prompt_text,
         "compact_data": compact_data,
         **files,
@@ -3271,6 +3400,13 @@ def run_progressed_report(natal: dict, progressed: dict, *, person_name: str = "
         placements=placement_interpretations,
         aspects=aspect_interpretations,
     )
+    raw_chart_text = build_raw_chart_text(
+        mode="progressed",
+        natal=natal,
+        progressed=progressed,
+        person_name=person_name,
+        aspects=aspects,
+    )
     llm_prompt_text = build_llm_reading_prompt(compact_data, mode="progressed")
     files = _save_report_files(
         result_text,
@@ -3286,6 +3422,7 @@ def run_progressed_report(natal: dict, progressed: dict, *, person_name: str = "
         "interpretation": interp,
         "easy_report_text": easy_report_text,
         "result_text": result_text,
+        "raw_chart_text": raw_chart_text,
         "llm_prompt_text": llm_prompt_text,
         "compact_data": compact_data,
         "context": ctx,
@@ -3316,6 +3453,13 @@ def run_transit_report(natal: dict, transit: dict, *, person_name: str = "あな
         placements=placement_interpretations,
         aspects=aspect_interpretations,
     )
+    raw_chart_text = build_raw_chart_text(
+        mode="transit",
+        natal=natal,
+        transit=transit,
+        person_name=person_name,
+        aspects=aspects,
+    )
     llm_prompt_text = build_llm_reading_prompt(compact_data, mode="transit")
     files = _save_report_files(
         result_text,
@@ -3331,6 +3475,7 @@ def run_transit_report(natal: dict, transit: dict, *, person_name: str = "あな
         "interpretation": interp,
         "easy_report_text": easy_report_text,
         "result_text": result_text,
+        "raw_chart_text": raw_chart_text,
         "llm_prompt_text": llm_prompt_text,
         "compact_data": compact_data,
         "context": ctx,
@@ -3372,6 +3517,14 @@ def run_triple_report(natal: dict, progressed: dict, transit: dict, *, person_na
         placements=placement_interpretations,
         aspects=aspect_interpretations,
     )
+    raw_chart_text = build_raw_chart_text(
+        mode="triple",
+        natal=natal,
+        progressed=progressed,
+        transit=transit,
+        person_name=person_name,
+        aspects=aspects,
+    )
     llm_prompt_text = build_llm_reading_prompt(compact_data, mode="triple")
     files = _save_report_files(
         result_text,
@@ -3387,6 +3540,7 @@ def run_triple_report(natal: dict, progressed: dict, transit: dict, *, person_na
         "interpretation": interp,
         "easy_report_text": easy_report_text,
         "result_text": result_text,
+        "raw_chart_text": raw_chart_text,
         "llm_prompt_text": llm_prompt_text,
         "compact_data": compact_data,
         "uscs_phase": triple_phase,
@@ -3428,6 +3582,14 @@ def run_synastry_report(person1: dict, person2: dict, *, person1_name: str = "�
         aspects=aspect_interpretations,
         overlays=overlay_interpretations,
     )
+    raw_chart_text = build_raw_chart_text(
+        mode="synastry",
+        natal=person1,
+        person2=person2,
+        person_name=person1_name,
+        person2_name=person2_name,
+        aspects=syn,
+    )
     llm_prompt_text = build_llm_reading_prompt(compact_data, mode="synastry")
     files = _save_report_files(
         result_text,
@@ -3443,6 +3605,7 @@ def run_synastry_report(person1: dict, person2: dict, *, person1_name: str = "�
         "interpretation": interp,
         "easy_report_text": easy_report_text,
         "result_text": result_text,
+        "raw_chart_text": raw_chart_text,
         "llm_prompt_text": llm_prompt_text,
         "compact_data": compact_data,
         "uscs_phase": syn_phase,
