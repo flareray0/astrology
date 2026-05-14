@@ -1,3 +1,4 @@
 data/results/*.txt
+data/results/*.json
 __pycache__/
 *.pyc
